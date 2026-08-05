@@ -137,13 +137,13 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [data.areas, view])
 
-  if (!ready) return <AppLoading label="Loading your workspace…" />
-  if (syncError && uid) return <WorkspaceError message={syncError} onSignOut={onSignOut} />
-
   const visibleTasks = useMemo(
     () => filterTasks(data.tasks, { query, areaId: areaFilter, priority: priorityFilter }),
     [data.tasks, query, areaFilter, priorityFilter],
   )
+
+  if (!ready) return <AppLoading label="Loading your workspace…" />
+  if (syncError && uid) return <WorkspaceError message={syncError} onSignOut={onSignOut} />
 
   const openNewTask = (status: Status = view === 'inbox' ? 'inbox' : 'todo') => {
     setEditorTask(emptyTask(status, areaFilter ?? data.areas[0]?.id ?? ''))
