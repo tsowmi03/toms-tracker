@@ -112,7 +112,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 - Persistent light and dark appearance modes
 - Installable web app manifest and same-origin offline shell
 - Email/password and Google authentication
-- Multiple personal and shared task boards
+- Multiple personal and shared task boards with member assignment
 - Expiring invite links and shared-board member management
 - Membership-scoped Firestore access
 - Realtime per-document Firestore sync

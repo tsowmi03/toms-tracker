@@ -197,8 +197,10 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
 .task-card h3 { margin: 0; overflow-wrap: anywhere; font: 700 12px/1.45 'Avenir Next', Avenir, sans-serif; letter-spacing: -.012em; }
 .task-description { display: -webkit-box; overflow: hidden; margin: 5px 0 0; color: #8d8c83; font-size: 10px; line-height: 1.45; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 13px; }
-.area-chip, .due-chip { display: inline-flex; align-items: center; gap: 5px; color: #88877f; font-size: 9px; font-weight: 600; }
+.area-chip, .assignee-chip, .due-chip { display: inline-flex; align-items: center; gap: 5px; color: #88877f; font-size: 9px; font-weight: 600; }
 .area-chip > span { width: 6px; height: 6px; border-radius: 50%; }
+.assignee-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assignee-chip svg { width: 12px; height: 12px; }
 .due-chip { margin-left: auto; }
 .due-chip svg { width: 12px; height: 12px; }
 .due-chip.overdue { color: #cf4f37; }
@@ -445,6 +447,7 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
 :root[data-theme='dark'] .priority-badge.low { color: #8ac5aa; background: #23392f; }
 :root[data-theme='dark'] .task-description,
 :root[data-theme='dark'] .area-chip,
+:root[data-theme='dark'] .assignee-chip,
 :root[data-theme='dark'] .due-chip { color: #aaa99f; }
 :root[data-theme='dark'] .column-empty { border-color: #484840; color: #77776e; }
 :root[data-theme='dark'] .progress-ring { background: conic-gradient(var(--orange) var(--progress), #3b3b34 var(--progress)); }

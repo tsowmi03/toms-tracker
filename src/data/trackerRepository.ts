@@ -1,14 +1,17 @@
 import {
   Timestamp,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
   writeBatch,
+  where,
   type DocumentData,
   type Firestore,
   type Unsubscribe,
@@ -56,6 +59,8 @@ function taskFromDocument(id: string, data: DocumentData): Task {
     dueDate: data.dueDate ? String(data.dueDate) : undefined,
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     isFocus: Boolean(data.isFocus),
+    assigneeId: data.assigneeId ? String(data.assigneeId) : undefined,
+    assigneeName: data.assigneeName ? String(data.assigneeName) : undefined,
     createdAt: String(data.createdAt ?? new Date().toISOString()),
     updatedAt: String(data.updatedAt ?? new Date().toISOString()),
     completedAt: data.completedAt ? String(data.completedAt) : undefined,
@@ -378,6 +383,7 @@ export async function acceptBoardInvite(uid: string, identity: MemberIdentity, i
 
 export async function leaveBoard(uid: string, boardId: string) {
   const { db } = servicesOrThrow()
+  await clearTaskAssignments(db, boardId, uid)
   const batch = writeBatch(db)
   batch.delete(doc(db, 'boards', boardId, 'members', uid))
   batch.delete(doc(db, 'users', uid, 'boardRefs', boardId))
@@ -388,12 +394,28 @@ export async function removeBoardMember(boardId: string, memberUid: string) {
   const { db } = servicesOrThrow()
   const memberReference = doc(db, 'boards', boardId, 'members', memberUid)
   const member = await getDoc(memberReference)
+  await clearTaskAssignments(db, boardId, memberUid)
   const batch = writeBatch(db)
   batch.delete(memberReference)
   batch.delete(doc(db, 'users', memberUid, 'boardRefs', boardId))
   const inviteId = member.exists() ? member.data().inviteId : undefined
   if (typeof inviteId === 'string' && inviteId) batch.delete(doc(db, 'boardInvites', inviteId))
   await batch.commit()
+}
+
+async function clearTaskAssignments(db: Firestore, boardId: string, memberUid: string) {
+  const assignedTasks = await getDocs(query(
+    collection(db, 'boards', boardId, 'tasks'),
+    where('assigneeId', '==', memberUid),
+  ))
+
+  for (let start = 0; start < assignedTasks.docs.length; start += MAX_BATCH_OPERATIONS) {
+    const batch = writeBatch(db)
+    assignedTasks.docs.slice(start, start + MAX_BATCH_OPERATIONS).forEach((task) => {
+      batch.update(task.ref, { assigneeId: deleteField(), assigneeName: deleteField() })
+    })
+    await batch.commit()
+  }
 }
 
 export async function removeStaleBoardReference(uid: string, boardId: string) {

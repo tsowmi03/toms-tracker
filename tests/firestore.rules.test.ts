@@ -244,10 +244,16 @@ describe('Firestore task-board membership rules', () => {
 
   it('rejects invalid tasks and unexpected board fields', async () => {
     const database = environment.authenticatedContext(aliceUid).firestore()
+    const bobDatabase = environment.authenticatedContext(bobUid).firestore()
     await createOwnedBoard(database, aliceUid)
+    await createInvite(database)
+    await acceptInvite(bobDatabase, bobUid)
 
     await assertFails(setDoc(doc(database, 'boards', boardId, 'tasks', validTask.id), { ...validTask, status: 'someday' }))
     await assertFails(setDoc(doc(database, 'boards', boardId, 'tasks', 'other-id'), validTask))
+    await assertSucceeds(setDoc(doc(database, 'boards', boardId, 'tasks', 'assigned-task'), { ...validTask, id: 'assigned-task', assigneeId: bobUid, assigneeName: 'Bob' }))
+    await assertFails(setDoc(doc(database, 'boards', boardId, 'tasks', 'invalid-assignee'), { ...validTask, id: 'invalid-assignee', assigneeId: bobUid }))
+    await assertFails(setDoc(doc(database, 'boards', boardId, 'tasks', 'non-member-assignee'), { ...validTask, id: 'non-member-assignee', assigneeId: charlieUid, assigneeName: 'Charlie' }))
     await assertFails(setDoc(doc(database, 'boards', 'bad-board'), { ...boardFields('bad-board', aliceUid), memberIds: [aliceUid] }))
   })
 })

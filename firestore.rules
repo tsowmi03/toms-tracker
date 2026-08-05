@@ -51,7 +51,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'id', 'title', 'description', 'status', 'priority', 'areaId',
-          'dueDate', 'tags', 'isFocus', 'createdAt', 'updatedAt', 'completedAt'
+          'dueDate', 'tags', 'isFocus', 'assigneeId', 'assigneeName',
+          'createdAt', 'updatedAt', 'completedAt'
         ])
         && data.id is string
         && data.id.size() > 0
@@ -73,8 +74,31 @@ service cloud.firestore {
         && data.createdAt.size() <= 40
         && data.updatedAt is string
         && data.updatedAt.size() <= 40
+        && (
+          (!('assigneeId' in data) && !('assigneeName' in data))
+          || (
+            data.assigneeId is string
+            && data.assigneeId.size() > 0
+            && data.assigneeId.size() <= 128
+            && data.assigneeName is string
+            && data.assigneeName.size() > 0
+            && data.assigneeName.size() <= 160
+          )
+        )
         && (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 10))
         && (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40));
+    }
+
+    function validBoardTask(boardId) {
+      let data = request.resource.data;
+      return validTask()
+        && (
+          !('assigneeId' in data)
+          || (
+            get(/databases/$(database)/documents/boards/$(boardId)).data.type == 'shared'
+            && exists(/databases/$(database)/documents/boards/$(boardId)/members/$(data.assigneeId))
+          )
+        );
     }
 
     function validBoard() {
@@ -248,7 +272,7 @@ service cloud.firestore {
         allow read: if isBoardMember(boardId);
         allow create, update: if isBoardMemberAfter(boardId)
           && request.resource.data.id == taskId
-          && validTask();
+          && validBoardTask(boardId);
         allow delete: if isBoardMember(boardId);
       }
     }

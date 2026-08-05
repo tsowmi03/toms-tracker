@@ -20,6 +20,8 @@ export interface Task {
   dueDate?: string
   tags: string[]
   isFocus: boolean
+  assigneeId?: string
+  assigneeName?: string
   createdAt: string
   updatedAt: string
   completedAt?: string

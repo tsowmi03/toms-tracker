@@ -7,7 +7,7 @@ import App from './App'
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const trackerState = vi.hoisted(() => ({ ready: false, updateData: vi.fn() }))
+const trackerState = vi.hoisted(() => ({ ready: false, sharedBoard: false, updateData: vi.fn() }))
 
 vi.mock('./auth/AuthContext', () => ({
   useAuth: () => ({
@@ -21,30 +21,25 @@ vi.mock('./auth/AuthContext', () => ({
 }))
 
 vi.mock('./data/useTrackerData', () => ({
-  useTrackerData: () => ({
+  useTrackerData: () => {
+    const type = trackerState.sharedBoard ? 'shared' : 'personal'
+    const board = {
+      id: 'personal-user-uid',
+      name: 'My tasks',
+      type,
+      ownerId: 'user-uid',
+      role: 'owner',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }
+    return {
     data: {
       version: 1,
       areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }],
       tasks: [],
     },
-    boards: [{
-      id: 'personal-user-uid',
-      name: 'My tasks',
-      type: 'personal',
-      ownerId: 'user-uid',
-      role: 'owner',
-      createdAt: '2026-08-05T00:00:00.000Z',
-      updatedAt: '2026-08-05T00:00:00.000Z',
-    }],
-    activeBoard: {
-      id: 'personal-user-uid',
-      name: 'My tasks',
-      type: 'personal',
-      ownerId: 'user-uid',
-      role: 'owner',
-      createdAt: '2026-08-05T00:00:00.000Z',
-      updatedAt: '2026-08-05T00:00:00.000Z',
-    },
+    boards: [board],
+    activeBoard: board,
     selectBoard: () => undefined,
     addBoard: async () => 'board-id',
     joinBoard: async () => 'board-id',
@@ -52,7 +47,22 @@ vi.mock('./data/useTrackerData', () => ({
     ready: trackerState.ready,
     syncState: 'synced',
     error: null,
-  }),
+    }
+  },
+}))
+
+vi.mock('./data/trackerRepository', () => ({
+  createBoardInvite: vi.fn(),
+  getBoardInvite: vi.fn(),
+  leaveBoard: vi.fn(),
+  removeBoardMember: vi.fn(),
+  subscribeToBoardMembers: (_boardId: string, onData: (members: Array<{ uid: string; role: string; displayName: string; email: string; joinedAt: string }>) => void) => {
+    onData([
+      { uid: 'user-uid', role: 'owner', displayName: 'Alice', email: 'alice@example.com', joinedAt: '2026-08-05T00:00:00.000Z' },
+      { uid: 'bob-uid', role: 'member', displayName: 'Bob', email: 'bob@example.com', joinedAt: '2026-08-05T00:00:00.000Z' },
+    ])
+    return () => undefined
+  },
 }))
 
 let root: Root | undefined
@@ -62,6 +72,7 @@ afterEach(async () => {
   root = undefined
   document.body.innerHTML = ''
   trackerState.ready = false
+  trackerState.sharedBoard = false
   trackerState.updateData.mockReset()
   localStorage.clear()
   delete document.documentElement.dataset.theme
@@ -131,5 +142,32 @@ describe('authenticated workspace', () => {
       expect.objectContaining({ name: 'Health', color: '#ef6334' }),
     ])
     expect(container.querySelector('#area-name')).toBeNull()
+  })
+
+  it('assigns a shared-board task to a board member', async () => {
+    trackerState.ready = true
+    trackerState.sharedBoard = true
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(<App />))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Add task"]')?.click())
+
+    const title = container.querySelector<HTMLInputElement>('#task-title')
+    const assignee = container.querySelector<HTMLSelectElement>('#task-assignee')
+    expect(title).not.toBeNull()
+    expect(assignee).not.toBeNull()
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(title, 'Buy groceries')
+      title?.dispatchEvent(new Event('input', { bubbles: true }))
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(assignee, 'bob-uid')
+      assignee?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => container.querySelector('form.task-editor')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+
+    const updater = trackerState.updateData.mock.calls[0][0]
+    const updated = updater({ version: 1, areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }], tasks: [] })
+    expect(updated.tasks[0]).toEqual(expect.objectContaining({ title: 'Buy groceries', assigneeId: 'bob-uid', assigneeName: 'Bob' }))
   })
 })

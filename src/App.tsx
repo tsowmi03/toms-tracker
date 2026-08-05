@@ -144,6 +144,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
   const [shareBoardOpen, setShareBoardOpen] = useState(false)
   const [invite, setInvite] = useState<BoardInvite | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  const [boardMembers, setBoardMembers] = useState<BoardMember[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
   const areaCreatedCallbackRef = useRef<((areaId: string) => void) | null>(null)
 
@@ -152,6 +153,18 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
     setAreaFilter(undefined)
     setQuery('')
   }, [activeBoard?.id])
+
+  useEffect(() => {
+    if (!activeBoard || activeBoard.type !== 'shared') {
+      setBoardMembers([])
+      return
+    }
+    return subscribeToBoardMembers(
+      activeBoard.id,
+      (members) => setBoardMembers([...members].sort((left, right) => memberLabel(left).localeCompare(memberLabel(right)))),
+      () => setBoardMembers([]),
+    )
+  }, [activeBoard?.id, activeBoard?.type])
 
   useEffect(() => {
     if (!uid || !ready) return
@@ -427,6 +440,8 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
           onSave={saveTask}
           onDelete={editorTask.id ? deleteTask : undefined}
           onAddArea={(onCreated) => openAddArea(onCreated)}
+          isSharedBoard={activeBoard.type === 'shared'}
+          members={boardMembers}
         />
       )}
 
@@ -716,6 +731,7 @@ function TaskCard({ task, areas, onOpen, onMove, onToggleFocus, wide = false }: 
       {task.description && <p className="task-description">{task.description}</p>}
       <div className="task-meta">
         {area && <span className="area-chip"><span style={{ backgroundColor: area.color }} />{area.name}</span>}
+        {task.assigneeName && <span className="assignee-chip" title={`Assigned to ${task.assigneeName}`}><UsersIcon />{task.assigneeName}</span>}
         {dueText && <span className={`due-chip ${overdue ? 'overdue' : ''}`}><CalendarIcon />{overdue ? 'Overdue' : dueText}</span>}
       </div>
       {task.tags.length > 0 && <div className="tag-row">{task.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
@@ -736,7 +752,11 @@ function EmptyState({ title, body, action, onAction }: { title: string; body: st
   )
 }
 
-function TaskEditor({ task, areas, onClose, onSave, onDelete, onAddArea }: { task: Task; areas: Area[]; onClose: () => void; onSave: (task: Task) => void; onDelete?: (taskId: string) => void; onAddArea: (onCreated: (areaId: string) => void) => void }) {
+function memberLabel(member: BoardMember) {
+  return member.displayName || member.email || 'Unnamed member'
+}
+
+function TaskEditor({ task, areas, onClose, onSave, onDelete, onAddArea, isSharedBoard, members }: { task: Task; areas: Area[]; onClose: () => void; onSave: (task: Task) => void; onDelete?: (taskId: string) => void; onAddArea: (onCreated: (areaId: string) => void) => void; isSharedBoard: boolean; members: BoardMember[] }) {
   const [draft, setDraft] = useState(task)
   const [tagText, setTagText] = useState(task.tags.join(', '))
   const titleRef = useRef<HTMLInputElement>(null)
@@ -791,6 +811,23 @@ function TaskEditor({ task, areas, onClose, onSave, onDelete, onAddArea }: { tas
             <label htmlFor="task-due">Due date</label>
             <input id="task-due" type="date" value={draft.dueDate ?? ''} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value || undefined })} />
           </div>
+          {isSharedBoard && (
+            <div className="field">
+              <label htmlFor="task-assignee">Assigned to</label>
+              <select id="task-assignee" value={draft.assigneeId ?? ''} onChange={(event) => {
+                const assignee = members.find((member) => member.uid === event.target.value)
+                setDraft({
+                  ...draft,
+                  assigneeId: assignee?.uid || undefined,
+                  assigneeName: assignee ? memberLabel(assignee) : undefined,
+                })
+              }}>
+                <option value="">Unassigned</option>
+                {draft.assigneeId && !members.some((member) => member.uid === draft.assigneeId) && <option value={draft.assigneeId}>{draft.assigneeName || 'Former member'}</option>}
+                {members.map((member) => <option value={member.uid} key={member.uid}>{memberLabel(member)}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="field full-field">
