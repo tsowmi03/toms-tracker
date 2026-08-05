@@ -20,12 +20,13 @@ import {
   LinkIcon,
   LockIcon,
   LogOutIcon,
-  MoreIcon,
+  MoonIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
   SlidersIcon,
   StarIcon,
+  SunIcon,
   TodayIcon,
   UsersIcon,
 } from './icons'
@@ -41,6 +42,7 @@ import {
 } from './data/trackerRepository'
 import { seedData } from './seed'
 import { exportData } from './storage'
+import { getPreferredTheme, saveTheme, type Theme } from './theme'
 import type { Area, BoardInvite, BoardMember, BoardType, Priority, Status, Task, TaskBoard, TrackerData, View } from './types'
 
 const emptyTask = (status: Status, areaId: string): Task => {
@@ -98,6 +100,9 @@ function WorkspaceError({ message, onSignOut }: { message: string; onSignOut?: (
 
 function App() {
   const auth = useAuth()
+  const [theme, setTheme] = useState<Theme>(() => getPreferredTheme())
+
+  useEffect(() => saveTheme(theme), [theme])
 
   if (auth.loading) return <AppLoading label="Checking your account…" />
   if (auth.configured && !auth.user) return <AuthScreen />
@@ -109,11 +114,13 @@ function App() {
       displayName={auth.user?.displayName}
       email={auth.user?.email}
       onSignOut={auth.configured ? auth.signOut : undefined}
+      theme={theme}
+      onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
     />
   )
 }
 
-function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { uid?: string; accountLabel?: string; displayName?: string | null; email?: string | null; onSignOut?: () => Promise<void> }) {
+function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme, onToggleTheme }: { uid?: string; accountLabel?: string; displayName?: string | null; email?: string | null; onSignOut?: () => Promise<void>; theme: Theme; onToggleTheme: () => void }) {
   const {
     data,
     updateData: setData,
@@ -132,11 +139,13 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { ui
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [editorTask, setEditorTask] = useState<Task | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [addAreaOpen, setAddAreaOpen] = useState(false)
   const [createBoardOpen, setCreateBoardOpen] = useState(false)
   const [shareBoardOpen, setShareBoardOpen] = useState(false)
   const [invite, setInvite] = useState<BoardInvite | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const areaCreatedCallbackRef = useRef<((areaId: string) => void) | null>(null)
 
   useEffect(() => {
     setEditorTask(null)
@@ -268,6 +277,22 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { ui
     setAreaFilter(undefined)
   }
 
+  const openAddArea = (onCreated?: (areaId: string) => void) => {
+    areaCreatedCallbackRef.current = onCreated ?? null
+    setAddAreaOpen(true)
+  }
+
+  const addArea = (name: string, color: string) => {
+    const id = crypto.randomUUID()
+    setData((current) => ({
+      ...current,
+      areas: [...current.areas, { id, name, color }],
+    }))
+    areaCreatedCallbackRef.current?.(id)
+    areaCreatedCallbackRef.current = null
+    setAddAreaOpen(false)
+  }
+
   const areaName = data.areas.find((area) => area.id === areaFilter)?.name
   const pageTitle = areaName ?? (view === 'board' ? activeBoard.name : viewTitles[view])
   const boardContext = `${activeBoard.type === 'shared' ? 'Shared' : 'Personal'} board${activeBoard.role === 'member' ? ' · Member' : ''}`
@@ -288,6 +313,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { ui
         activeBoard={activeBoard}
         onBoard={selectBoard}
         onAddBoard={() => setCreateBoardOpen(true)}
+        onAddArea={() => openAddArea()}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -320,7 +346,10 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { ui
           </label>
           <div className="topbar-actions">
             <SyncIndicator state={syncState} />
-            <button className="primary-button" onClick={() => openNewTask()}>
+            <button className="icon-button theme-button" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
+              {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+            </button>
+            <button className="primary-button" onClick={() => openNewTask()} aria-label="Add task">
               <PlusIcon />
               <span>Add task</span>
             </button>
@@ -397,6 +426,18 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { ui
           onClose={() => setEditorTask(null)}
           onSave={saveTask}
           onDelete={editorTask.id ? deleteTask : undefined}
+          onAddArea={(onCreated) => openAddArea(onCreated)}
+        />
+      )}
+
+      {addAreaOpen && (
+        <AddAreaPanel
+          areas={data.areas}
+          onClose={() => {
+            areaCreatedCallbackRef.current = null
+            setAddAreaOpen(false)
+          }}
+          onAdd={addArea}
         />
       )}
 
@@ -484,10 +525,11 @@ interface SidebarProps {
   activeBoard: TaskBoard
   onBoard: (boardId: string) => void
   onAddBoard: () => void
+  onAddArea: () => void
   onSettings: () => void
 }
 
-function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, boards, activeBoard, onBoard, onAddBoard, onSettings }: SidebarProps) {
+function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, boards, activeBoard, onBoard, onAddBoard, onAddArea, onSettings }: SidebarProps) {
   const inboxCount = tasks.filter((task) => task.status === 'inbox').length
   const todayCount = tasks.filter((task) => task.status !== 'done' && (task.isFocus || isDueToday(task) || isOverdue(task))).length
 
@@ -518,7 +560,7 @@ function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, boards, activ
       </nav>
 
       <div className="sidebar-section">
-        <div className="sidebar-section-title"><span>Areas</span><button aria-label="Area options"><MoreIcon /></button></div>
+        <div className="sidebar-section-title"><span>Areas</span><button aria-label="Add area" onClick={onAddArea}><PlusIcon /></button></div>
         <div className="area-list">
           {areas.map((area) => (
             <button className={areaFilter === area.id ? 'active' : ''} key={area.id} onClick={() => onArea(area.id)}>
@@ -694,7 +736,7 @@ function EmptyState({ title, body, action, onAction }: { title: string; body: st
   )
 }
 
-function TaskEditor({ task, areas, onClose, onSave, onDelete }: { task: Task; areas: Area[]; onClose: () => void; onSave: (task: Task) => void; onDelete?: (taskId: string) => void }) {
+function TaskEditor({ task, areas, onClose, onSave, onDelete, onAddArea }: { task: Task; areas: Area[]; onClose: () => void; onSave: (task: Task) => void; onDelete?: (taskId: string) => void; onAddArea: (onCreated: (areaId: string) => void) => void }) {
   const [draft, setDraft] = useState(task)
   const [tagText, setTagText] = useState(task.tags.join(', '))
   const titleRef = useRef<HTMLInputElement>(null)
@@ -734,7 +776,7 @@ function TaskEditor({ task, areas, onClose, onSave, onDelete }: { task: Task; ar
             </select>
           </div>
           <div className="field">
-            <label htmlFor="task-area">Area</label>
+            <div className="field-label-row"><label htmlFor="task-area">Area</label><button type="button" onClick={() => onAddArea((areaId) => setDraft((current) => ({ ...current, areaId })))}>Add area</button></div>
             <select id="task-area" value={draft.areaId} onChange={(event) => setDraft({ ...draft, areaId: event.target.value })}>
               {areas.map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}
             </select>
@@ -766,6 +808,58 @@ function TaskEditor({ task, areas, onClose, onSave, onDelete }: { task: Task; ar
           {onDelete ? <button type="button" className="delete-button" onClick={() => onDelete(task.id)}>Delete</button> : <span />}
           <div><button type="button" className="cancel-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button">{task.id ? 'Save changes' : 'Add task'}</button></div>
         </div>
+      </form>
+    </div>
+  )
+}
+
+const AREA_COLORS = [
+  { name: 'Orange', value: '#ef6334' },
+  { name: 'Green', value: '#2f7d61' },
+  { name: 'Purple', value: '#7357d6' },
+  { name: 'Blue', value: '#2d7dd2' },
+  { name: 'Pink', value: '#c94f7c' },
+  { name: 'Gold', value: '#b48713' },
+  { name: 'Slate', value: '#4f7c8a' },
+  { name: 'Grey', value: '#77776e' },
+]
+
+function AddAreaPanel({ areas, onClose, onAdd }: { areas: Area[]; onClose: () => void; onAdd: (name: string, color: string) => void }) {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState(AREA_COLORS[0].value)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const trimmedName = name.trim()
+    if (!trimmedName) return
+    if (areas.some((area) => area.name.toLocaleLowerCase() === trimmedName.toLocaleLowerCase())) {
+      setError('An area with this name already exists on the board.')
+      return
+    }
+    onAdd(trimmedName, color)
+  }
+
+  return (
+    <div className="modal-backdrop area-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <form className="settings-panel area-panel" onSubmit={submit}>
+        <div className="editor-header"><div><span className="editor-kicker">Organise work</span><h2>Add an area</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><CloseIcon /></button></div>
+        <div className="field full-field">
+          <label htmlFor="area-name">Area name</label>
+          <input id="area-name" autoFocus value={name} onChange={(event) => { setName(event.target.value); setError(null) }} maxLength={100} placeholder="Health, study, home…" required />
+        </div>
+        <fieldset className="color-options">
+          <legend>Colour</legend>
+          {AREA_COLORS.map((option) => (
+            <label key={option.value} style={{ '--area-color': option.value } as React.CSSProperties}>
+              <input type="radio" name="area-color" value={option.value} checked={color === option.value} onChange={() => setColor(option.value)} />
+              <span />
+              <span className="visually-hidden">{option.name}</span>
+            </label>
+          ))}
+        </fieldset>
+        {error && <p className="panel-error" role="alert">{error}</p>}
+        <div className="panel-footer"><button type="button" className="cancel-button" onClick={onClose}>Cancel</button><button className="primary-button">Add area</button></div>
       </form>
     </div>
   )

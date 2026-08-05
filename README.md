@@ -109,6 +109,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 ## Current capabilities
 
 - Responsive desktop and mobile interface
+- Persistent light and dark appearance modes
 - Installable web app manifest and same-origin offline shell
 - Email/password and Google authentication
 - Multiple personal and shared task boards
@@ -117,7 +118,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 - Realtime per-document Firestore sync
 - Multi-tab persistent Firestore cache and per-board offline mirrors
 - Drag-and-drop Kanban board on desktop
-- Task editing with areas, priorities, dates, notes, tags, and daily focus
+- Custom board areas and task editing with priorities, dates, notes, tags, and daily focus
 - Search, filtering, local mirroring, and JSON backup export
 - Keyboard shortcuts: `N` for a new task and `Command/Ctrl + K` for search
 
