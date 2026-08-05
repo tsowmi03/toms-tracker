@@ -189,7 +189,7 @@ export function useTrackerData(uid?: string, identity: MemberIdentity = {}) {
 
     saveData(next, uid, activeBoardId)
     setSyncState(navigator.onLine ? 'syncing' : 'offline')
-    void persistWorkspaceChanges(activeBoardId, previous, next)
+    void persistWorkspaceChanges(activeBoardId, previous, next, uid)
       .catch(() => {
         setError('A change could not be synced. It remains saved on this device.')
         setSyncState(navigator.onLine ? 'error' : 'offline')

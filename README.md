@@ -87,7 +87,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 
 - A new account starts with a personal board containing the standard areas and no sample tasks.
 - Users can create additional personal boards or shared boards.
-- Existing per-user tasks and areas are copied into the first personal board on first use. Legacy documents remain in place as a rollback source.
+- Existing per-user tasks and areas are copied into the first personal board on first use. That original board temporarily mirrors later edits to the legacy documents so a hosting rollback retains current personal tasks.
 - Migration is resumable and is marked complete only after every task and area is copied.
 - Each board's browser mirror is scoped by both UID and board ID, preventing account or board switching from exposing the wrong cached data.
 - Shared boards are joined through an expiring link; no email address directory is exposed to clients.

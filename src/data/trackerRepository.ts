@@ -27,7 +27,7 @@ import type {
 } from '../types'
 
 const SCHEMA_VERSION = 2
-const MAX_BATCH_OPERATIONS = 440
+const MAX_BATCH_OPERATIONS = 220
 const INVITE_LIFETIME_DAYS = 7
 
 export interface MemberIdentity {
@@ -247,8 +247,9 @@ function valuesDiffer(left: unknown, right: unknown) {
   return JSON.stringify(left) !== JSON.stringify(right)
 }
 
-export async function persistWorkspaceChanges(boardId: string, previous: TrackerData, next: TrackerData) {
+export async function persistWorkspaceChanges(boardId: string, previous: TrackerData, next: TrackerData, legacyUid?: string) {
   const { db } = servicesOrThrow()
+  const mirrorLegacyWorkspace = Boolean(legacyUid && boardId === `personal-${legacyUid}`)
   const operations: Array<(batch: ReturnType<typeof writeBatch>) => void> = []
   const previousTasks = new Map(previous.tasks.map((task) => [task.id, task]))
   const nextTasks = new Map(next.tasks.map((task) => [task.id, task]))
@@ -257,19 +258,31 @@ export async function persistWorkspaceChanges(boardId: string, previous: Tracker
 
   nextTasks.forEach((task, id) => {
     if (valuesDiffer(previousTasks.get(id), task)) {
-      operations.push((batch) => batch.set(doc(db, 'boards', boardId, 'tasks', id), stripUndefined(task)))
+      operations.push((batch) => {
+        batch.set(doc(db, 'boards', boardId, 'tasks', id), stripUndefined(task))
+        if (mirrorLegacyWorkspace && legacyUid) batch.set(doc(db, 'users', legacyUid, 'tasks', id), stripUndefined(task))
+      })
     }
   })
   previousTasks.forEach((_, id) => {
-    if (!nextTasks.has(id)) operations.push((batch) => batch.delete(doc(db, 'boards', boardId, 'tasks', id)))
+    if (!nextTasks.has(id)) operations.push((batch) => {
+      batch.delete(doc(db, 'boards', boardId, 'tasks', id))
+      if (mirrorLegacyWorkspace && legacyUid) batch.delete(doc(db, 'users', legacyUid, 'tasks', id))
+    })
   })
   nextAreas.forEach((area, id) => {
     if (valuesDiffer(previousAreas.get(id), area)) {
-      operations.push((batch) => batch.set(doc(db, 'boards', boardId, 'areas', id), area))
+      operations.push((batch) => {
+        batch.set(doc(db, 'boards', boardId, 'areas', id), area)
+        if (mirrorLegacyWorkspace && legacyUid) batch.set(doc(db, 'users', legacyUid, 'areas', id), area)
+      })
     }
   })
   previousAreas.forEach((_, id) => {
-    if (!nextAreas.has(id)) operations.push((batch) => batch.delete(doc(db, 'boards', boardId, 'areas', id)))
+    if (!nextAreas.has(id)) operations.push((batch) => {
+      batch.delete(doc(db, 'boards', boardId, 'areas', id))
+      if (mirrorLegacyWorkspace && legacyUid) batch.delete(doc(db, 'users', legacyUid, 'areas', id))
+    })
   })
 
   await commitOperations(db, operations)

@@ -120,6 +120,11 @@ describe('Firestore task-board membership rules', () => {
     await assertSucceeds(getDocs(collection(database, 'boards', boardId, 'members')))
     await assertSucceeds(setDoc(doc(database, 'boards', boardId, 'tasks', validTask.id), validTask))
     await assertSucceeds(setDoc(doc(database, 'boards', 'personal-board', 'tasks', validTask.id), validTask))
+
+    const rollbackMirror = writeBatch(database)
+    rollbackMirror.set(doc(database, 'boards', 'personal-board', 'tasks', 'mirrored-task'), { ...validTask, id: 'mirrored-task' })
+    rollbackMirror.set(doc(database, 'users', aliceUid, 'tasks', 'mirrored-task'), { ...validTask, id: 'mirrored-task' })
+    await assertSucceeds(rollbackMirror.commit())
   })
 
   it('blocks every non-member from a board and its collections', async () => {
