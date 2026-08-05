@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null
+        && request.auth.uid == userId
+        && request.auth.uid == 'URmG3ELER5YzUrwjLiYy3vl1ags1';
+    }
+
+    function validArea() {
+      return request.resource.data.keys().hasAll(['id', 'name', 'color'])
+        && request.resource.data.keys().hasOnly(['id', 'name', 'color'])
+        && request.resource.data.id is string
+        && request.resource.data.id.size() > 0
+        && request.resource.data.id.size() <= 100
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.color is string
+        && request.resource.data.color.size() <= 30;
+    }
+
+    function validTask() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'id', 'title', 'description', 'status', 'priority', 'areaId',
+          'tags', 'isFocus', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'description', 'status', 'priority', 'areaId',
+          'dueDate', 'tags', 'isFocus', 'createdAt', 'updatedAt', 'completedAt'
+        ])
+        && data.id is string
+        && data.id.size() > 0
+        && data.id.size() <= 100
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 500
+        && data.description is string
+        && data.description.size() <= 20000
+        && data.status in ['inbox', 'todo', 'progress', 'waiting', 'done']
+        && data.priority in ['none', 'low', 'medium', 'high', 'urgent']
+        && data.areaId is string
+        && data.areaId.size() > 0
+        && data.areaId.size() <= 100
+        && data.tags is list
+        && data.tags.size() <= 20
+        && data.isFocus is bool
+        && data.createdAt is string
+        && data.createdAt.size() <= 40
+        && data.updatedAt is string
+        && data.updatedAt.size() <= 40
+        && (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 10))
+        && (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40));
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
+        && request.resource.data.schemaVersion == 1;
+      allow update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
+        && request.resource.data.schemaVersion == 1;
+      allow delete: if false;
+
+      match /areas/{areaId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.id == areaId
+          && validArea();
+        allow delete: if isOwner(userId);
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.id == taskId
+          && validTask();
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
