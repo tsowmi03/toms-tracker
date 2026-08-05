@@ -6,11 +6,11 @@ A local-first, Jira-inspired personal task tracker with Firebase authentication 
 
 - Firebase project: `toms-tracker-tsowmi`
 - Firestore: Native mode in Sydney (`australia-southeast1`) with delete protection
-- Authentication: owner account only; public account creation is disabled
+- Authentication: self-service Google and email/password accounts
 - Hosting: `https://toms-tracker-tsowmi.web.app`
 - Source: private GitHub repository `tsowmi03/toms-tracker`
 
-The production Firebase configuration and owner binding live in ignored `.env.local` and `.env.production.local` files. Never commit those files.
+The production Firebase configuration lives in ignored `.env.local` and `.env.production.local` files. Never commit those files.
 
 ## Workflow
 
@@ -32,31 +32,33 @@ Without Firebase environment values, the app runs in local development mode and 
 
 ## Firebase architecture
 
-The live application uses Firebase Authentication and Cloud Firestore. Each task and area is stored as a separate document beneath the authenticated owner:
+The live application uses Firebase Authentication and Cloud Firestore. Every account has an independent workspace, with each task and area stored beneath that user's Firebase UID:
 
 ```text
-users/{ownerUid}
+users/{userId}
 ├── areas/{areaId}
 └── tasks/{taskId}
 ```
 
 ### Local configuration
 
-Copy `.env.example` to `.env.local` for development and enter the Firebase Web app values. Set `VITE_FIREBASE_OWNER_UID` to the UID copied above.
+Copy `.env.example` to `.env.local` for development and enter the Firebase Web app values.
 
-For a production build, use `.env.production.local` with the same variables. Keep `VITE_ALLOW_SIGN_UP=false`; the live Firebase project also rejects new account creation at the service level.
+For a production build, use `.env.production.local` with the same variables and set `VITE_ALLOW_SIGN_UP=true`.
 
 Firebase Web configuration values identify the project and are shipped to the browser. They are not server credentials. Firestore Security Rules are the data-access boundary.
 
-### Owner lock
+### Per-user isolation
 
-The production rules are pinned to the live owner UID. If the owner or Firebase project changes, update the UID in `firestore.rules` and `VITE_FIREBASE_OWNER_UID` together.
+Firestore rules require the authenticated UID to match the `{userId}` in every document path. Users cannot list, read, create, update, or delete another user's profile, areas, or tasks.
+
+There are no shared boards, workspace memberships, or cross-user task queries. Every account is independent.
 
 The production build gate checks that:
 
 - Required Firebase values are present.
-- The owner placeholder has been replaced.
-- The owner UID in the environment matches the UID in the rules.
+- Account registration is enabled for the production build.
+- Firestore rules use per-user UID matching and contain no hard-coded account UID.
 
 ## Validate and deploy
 
@@ -71,9 +73,9 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 
 ## Storage and migration behaviour
 
-- A browser with existing local tracker data uploads that workspace the first time the owner signs in.
-- A new browser starts with the standard areas and no sample tasks.
-- The owner profile document records that initialisation has occurred, preventing deleted tasks from being recreated later.
+- A new account starts with the standard areas and no sample tasks.
+- Each account's browser mirror uses a UID-scoped storage key, preventing account switching from exposing or copying another user's cached data.
+- The user profile document records that initialisation has occurred, preventing deleted tasks from being recreated later.
 - Firestore realtime listeners keep signed-in devices current.
 - Firestore's persistent browser cache keeps established devices usable offline and queues changes for later synchronisation.
 - The app maintains a local mirror and supports manual JSON backup export.
@@ -86,7 +88,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 | `npm run test` | Run task and board logic tests |
 | `npm run test:rules` | Run security rules against the Firestore emulator |
 | `npm run build` | Build with local mode permitted |
-| `npm run build:production` | Require valid Firebase and owner configuration, then build |
+| `npm run build:production` | Require valid Firebase and multi-user configuration, then build |
 | `npm run preview` | Preview the built application |
 
 ## Current capabilities
@@ -94,10 +96,10 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 - Responsive desktop and mobile interface
 - Installable web app manifest and same-origin offline shell
 - Email/password and Google authentication
-- Owner UID check in both the client and Firestore rules
+- Self-service accounts with per-user client and Firestore isolation
 - Realtime per-document Firestore sync
 - Multi-tab persistent Firestore cache
-- One-time migration from browser-local data
+- UID-scoped offline browser mirrors
 - Drag-and-drop Kanban board on desktop
 - Task editing with areas, priorities, dates, notes, tags, and daily focus
 - Search, filtering, local mirroring, and JSON backup export

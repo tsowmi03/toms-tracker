@@ -13,12 +13,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import {
-  firebaseConfigured,
-  firebaseOwnerUid,
-  getFirebaseServices,
-  signUpEnabled,
-} from '../firebase'
+import { firebaseConfigured, getFirebaseServices, signUpEnabled } from '../firebase'
 
 interface AuthContextValue {
   configured: boolean
@@ -65,13 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void getRedirectResult(services.auth).catch((authError) => setError(friendlyAuthError(authError)))
 
     return onAuthStateChanged(services.auth, (nextUser) => {
-      if (nextUser && firebaseOwnerUid && nextUser.uid !== firebaseOwnerUid) {
-        setError('This account is not authorised to use this workspace.')
-        void firebaseSignOut(services.auth)
-        setUser(null)
-      } else {
-        setUser(nextUser)
-      }
+      setUser(nextUser)
       setLoading(false)
     })
   }, [])

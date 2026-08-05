@@ -49,7 +49,7 @@ export function AuthScreen() {
         <div className="auth-heading">
           <span>Private workspace</span>
           <h1>{creating ? 'Create your account' : 'Welcome back'}</h1>
-          <p>Sign in to keep your board in sync across your devices.</p>
+          <p>{creating ? 'Create a private board that stays in sync across your devices.' : 'Sign in to keep your board in sync across your devices.'}</p>
         </div>
 
         <button
@@ -85,10 +85,10 @@ export function AuthScreen() {
         {!creating && <button className="forgot-button" type="button" onClick={resetPassword} disabled={submitting}>Forgot password?</button>}
         {auth.signUpEnabled && (
           <button className="auth-switch" type="button" onClick={() => { setCreating(!creating); auth.clearError(); setNotice(null) }}>
-            {creating ? 'Already have an account? Sign in' : 'Need the owner account? Create it'}
+            {creating ? 'Already have an account? Sign in' : 'Need an account? Create one'}
           </button>
         )}
-        <p className="auth-footnote">Your tasks are encrypted in transit and isolated to your signed-in account.</p>
+        <p className="auth-footnote">Your workspace is encrypted in transit and isolated to your signed-in account.</p>
       </section>
     </main>
   )

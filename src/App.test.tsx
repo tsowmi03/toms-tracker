@@ -13,7 +13,7 @@ vi.mock('./auth/AuthContext', () => ({
   useAuth: () => ({
     configured: true,
     signUpEnabled: false,
-    user: { uid: 'owner-uid', email: 'owner@example.com' },
+    user: { uid: 'user-uid', email: 'user@example.com' },
     loading: false,
     error: null,
     signOut: async () => undefined,
