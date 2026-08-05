@@ -139,6 +139,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [editorTask, setEditorTask] = useState<Task | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mobileBoardsOpen, setMobileBoardsOpen] = useState(false)
   const [addAreaOpen, setAddAreaOpen] = useState(false)
   const [createBoardOpen, setCreateBoardOpen] = useState(false)
   const [shareBoardOpen, setShareBoardOpen] = useState(false)
@@ -192,6 +193,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
       if (event.key === 'Escape') {
         setEditorTask(null)
         setSettingsOpen(false)
+        setMobileBoardsOpen(false)
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -430,7 +432,14 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
         </main>
       </div>
 
-      <MobileNav view={view} onView={selectView} inboxCount={data.tasks.filter((task) => task.status === 'inbox').length} onAdd={() => openNewTask()} />
+      <MobileNav
+        view={view}
+        onView={selectView}
+        inboxCount={data.tasks.filter((task) => task.status === 'inbox').length}
+        onAdd={() => openNewTask()}
+        onBoards={() => setMobileBoardsOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+      />
 
       {editorTask && (
         <TaskEditor
@@ -467,6 +476,23 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
             if (!window.confirm('Replace all current tasks with the sample workspace?')) return
             setData(() => seedData)
             setSettingsOpen(false)
+          }}
+        />
+      )}
+
+      {mobileBoardsOpen && (
+        <MobileBoardsPanel
+          boards={boards}
+          activeBoard={activeBoard}
+          onClose={() => setMobileBoardsOpen(false)}
+          onBoard={(boardId) => {
+            selectBoard(boardId)
+            selectView('board')
+            setMobileBoardsOpen(false)
+          }}
+          onAddBoard={() => {
+            setMobileBoardsOpen(false)
+            setCreateBoardOpen(true)
           }}
         />
       )}
@@ -1093,14 +1119,45 @@ function SettingsPanel({ data, accountLabel, syncState, onSignOut, onClose, onRe
   )
 }
 
-function MobileNav({ view, onView, inboxCount, onAdd }: { view: View; onView: (view: View) => void; inboxCount: number; onAdd: () => void }) {
+function MobileBoardsPanel({ boards, activeBoard, onBoard, onAddBoard, onClose }: { boards: TaskBoard[]; activeBoard: TaskBoard; onBoard: (boardId: string) => void; onAddBoard: () => void; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop mobile-only-panel" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="settings-panel mobile-board-panel" aria-labelledby="mobile-board-panel-title">
+        <div className="editor-header">
+          <div><span className="editor-kicker">Workspace</span><h2 id="mobile-board-panel-title">Task boards</h2></div>
+          <button className="icon-button" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+        </div>
+        <div className="mobile-board-list">
+          {boards.map((board) => (
+            <button
+              className={activeBoard.id === board.id ? 'active' : ''}
+              key={board.id}
+              onClick={() => onBoard(board.id)}
+              aria-current={activeBoard.id === board.id ? 'page' : undefined}
+            >
+              <span>{board.type === 'shared' ? <UsersIcon /> : <LockIcon />}</span>
+              <div>
+                <strong>{board.name}</strong>
+                <small>{board.type === 'shared' ? `Shared board${board.role === 'member' ? ' · Member' : ''}` : 'Personal board'}</small>
+              </div>
+              {activeBoard.id === board.id && <CheckIcon />}
+            </button>
+          ))}
+        </div>
+        <button className="secondary-button mobile-create-board" onClick={onAddBoard}><PlusIcon />Create task board</button>
+      </section>
+    </div>
+  )
+}
+
+function MobileNav({ view, onView, inboxCount, onAdd, onBoards, onSettings }: { view: View; onView: (view: View) => void; inboxCount: number; onAdd: () => void; onBoards: () => void; onSettings: () => void }) {
   return (
     <nav className="mobile-nav" aria-label="Mobile navigation">
       <button className={view === 'today' ? 'active' : ''} onClick={() => onView('today')}><TodayIcon /><span>Today</span></button>
-      <button className={view === 'board' ? 'active' : ''} onClick={() => onView('board')}><BoardIcon /><span>Board</span></button>
+      <button className={view === 'board' ? 'active' : ''} onClick={onBoards}><BoardIcon /><span>Boards</span></button>
       <button className="mobile-add" onClick={onAdd} aria-label="Add task"><PlusIcon /></button>
       <button className={view === 'inbox' ? 'active' : ''} onClick={() => onView('inbox')}><span className="mobile-icon-wrap"><InboxIcon />{inboxCount > 0 && <i>{inboxCount}</i>}</span><span>Inbox</span></button>
-      <button onClick={() => document.querySelector<HTMLInputElement>('.search-box input')?.focus()}><SearchIcon /><span>Search</span></button>
+      <button onClick={onSettings}><SettingsIcon /><span>Settings</span></button>
     </nav>
   )
 }

@@ -7,7 +7,7 @@ import App from './App'
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const trackerState = vi.hoisted(() => ({ ready: false, sharedBoard: false, updateData: vi.fn() }))
+const trackerState = vi.hoisted(() => ({ ready: false, sharedBoard: false, updateData: vi.fn(), selectBoard: vi.fn(), signOut: vi.fn() }))
 
 vi.mock('./auth/AuthContext', () => ({
   useAuth: () => ({
@@ -16,7 +16,7 @@ vi.mock('./auth/AuthContext', () => ({
     user: { uid: 'user-uid', email: 'user@example.com' },
     loading: false,
     error: null,
-    signOut: async () => undefined,
+    signOut: trackerState.signOut,
   }),
 }))
 
@@ -32,15 +32,24 @@ vi.mock('./data/useTrackerData', () => ({
       createdAt: '2026-08-05T00:00:00.000Z',
       updatedAt: '2026-08-05T00:00:00.000Z',
     }
+    const secondBoard = {
+      id: 'shared-family',
+      name: 'Family projects',
+      type: 'shared',
+      ownerId: 'other-user',
+      role: 'member',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }
     return {
     data: {
       version: 1,
       areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }],
       tasks: [],
     },
-    boards: [board],
+    boards: [board, secondBoard],
     activeBoard: board,
-    selectBoard: () => undefined,
+    selectBoard: trackerState.selectBoard,
     addBoard: async () => 'board-id',
     joinBoard: async () => 'board-id',
     updateData: trackerState.updateData,
@@ -74,6 +83,8 @@ afterEach(async () => {
   trackerState.ready = false
   trackerState.sharedBoard = false
   trackerState.updateData.mockReset()
+  trackerState.selectBoard.mockReset()
+  trackerState.signOut.mockReset()
   localStorage.clear()
   delete document.documentElement.dataset.theme
   document.documentElement.style.removeProperty('color-scheme')
@@ -110,6 +121,43 @@ describe('authenticated workspace', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(localStorage.getItem('toms-tracker-theme-v1')).toBe('dark')
     expect(container.querySelector('[aria-label="Switch to light mode"]')).not.toBeNull()
+  })
+
+  it('lets mobile users choose another task board', async () => {
+    trackerState.ready = true
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(<App />))
+    const mobileNav = container.querySelector('nav[aria-label="Mobile navigation"]')
+    await act(async () => mobileNav?.querySelector<HTMLButtonElement>('button:nth-child(2)')?.click())
+
+    expect(container.querySelector('#mobile-board-panel-title')?.textContent).toBe('Task boards')
+    const familyBoard = Array.from(container.querySelectorAll<HTMLButtonElement>('.mobile-board-list button'))
+      .find((button) => button.textContent?.includes('Family projects'))
+    await act(async () => familyBoard?.click())
+
+    expect(trackerState.selectBoard).toHaveBeenCalledWith('shared-family')
+    expect(container.querySelector('#mobile-board-panel-title')).toBeNull()
+  })
+
+  it('lets mobile users open settings and sign out', async () => {
+    trackerState.ready = true
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(<App />))
+    const mobileNav = container.querySelector('nav[aria-label="Mobile navigation"]')
+    await act(async () => mobileNav?.querySelector<HTMLButtonElement>('button:last-child')?.click())
+
+    const signOut = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Sign out'))
+    expect(signOut).toBeDefined()
+    await act(async () => signOut?.click())
+
+    expect(trackerState.signOut).toHaveBeenCalledTimes(1)
   })
 
   it('adds a custom area to the current board', async () => {
