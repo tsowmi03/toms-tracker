@@ -396,6 +396,20 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
 @keyframes sync-pulse { 50% { opacity: .4; transform: scale(.8); } }
 
 .mobile-nav { display: none; }
+.mobile-only-panel { display: none; }
+
+.mobile-board-list { display: grid; gap: 9px; }
+.mobile-board-list > button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 11px; padding: 13px; color: var(--ink); background: var(--paper); text-align: left; }
+.mobile-board-list > button.active { border-color: #9f94c8; box-shadow: 0 0 0 3px rgb(115 87 214 / 8%); }
+.mobile-board-list > button > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #5f4cb0; background: #eee9ff; }
+.mobile-board-list > button > span svg { width: 17px; height: 17px; }
+.mobile-board-list > button > div { min-width: 0; display: grid; gap: 3px; }
+.mobile-board-list strong, .mobile-board-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-board-list strong { font-size: 12px; }
+.mobile-board-list small { color: var(--muted); font-size: 9px; }
+.mobile-board-list > button > svg { width: 17px; height: 17px; color: var(--green); }
+.mobile-create-board { width: 100%; margin-top: 14px; }
+.mobile-create-board svg { width: 17px; height: 17px; }
 
 :root[data-theme='dark'] {
   --ink: #f0eee7;
@@ -487,6 +501,8 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
 :root[data-theme='dark'] .invite-summary p { color: #b8aedb; }
 :root[data-theme='dark'] .settings-copy { background: #121210; }
 :root[data-theme='dark'] .settings-action.sign-out-action > span { color: #ee9a88; background: #42251f; }
+:root[data-theme='dark'] .mobile-board-list > button.active { border-color: #8c7ad0; }
+:root[data-theme='dark'] .mobile-board-list > button > span { color: #c3b6f4; background: #302a45; }
 :root[data-theme='dark'] .settings-danger button { border-color: #74483e; color: #ee9a88; background: #34211d; }
 :root[data-theme='dark'] .auth-shell { background: radial-gradient(circle at 50% 0%, #2b241d 0, var(--canvas) 48%); }
 :root[data-theme='dark'] .google-button,
@@ -549,6 +565,7 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
   .inbox-row { grid-template-columns: 1fr; }
   .plan-button { justify-self: end; margin-top: -3px; }
   .modal-backdrop { align-items: end; padding: 0; }
+  .mobile-only-panel { display: grid; }
   .task-editor, .settings-panel { width: 100%; max-height: 92dvh; border-radius: 19px 19px 0 0; }
   .task-editor { padding: 22px 18px 0; }
   .settings-panel { padding: 22px 18px calc(20px + env(safe-area-inset-bottom)); }
