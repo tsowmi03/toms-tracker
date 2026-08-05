@@ -50,4 +50,17 @@ describe('browser workspace isolation', () => {
     expect(loadData('user-uid')).toEqual(signedIn)
     expect(hasStoredData('new-user-uid')).toBe(false)
   })
+
+  it('stores a separate offline mirror for every board', () => {
+    const personal = workspace('Personal board')
+    const shared = workspace('Shared board')
+
+    saveData(personal, 'alice-uid', 'personal-board')
+    saveData(shared, 'alice-uid', 'shared-board')
+
+    expect(loadData('alice-uid', 'personal-board')).toEqual(personal)
+    expect(loadData('alice-uid', 'shared-board')).toEqual(shared)
+    expect(hasStoredData('alice-uid', 'personal-board')).toBe(true)
+    expect(hasStoredData('alice-uid', 'missing-board')).toBe(false)
+  })
 })

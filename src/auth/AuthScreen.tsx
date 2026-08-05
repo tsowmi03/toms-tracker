@@ -47,9 +47,9 @@ export function AuthScreen() {
           <span>Tom’s Tracker</span>
         </div>
         <div className="auth-heading">
-          <span>Private workspace</span>
+          <span>Boards that fit your life</span>
           <h1>{creating ? 'Create your account' : 'Welcome back'}</h1>
-          <p>{creating ? 'Create a private board that stays in sync across your devices.' : 'Sign in to keep your board in sync across your devices.'}</p>
+          <p>{creating ? 'Start with a private board, then create shared boards when you need them.' : 'Sign in to keep your personal and shared boards in sync across your devices.'}</p>
         </div>
 
         <button
@@ -88,7 +88,7 @@ export function AuthScreen() {
             {creating ? 'Already have an account? Sign in' : 'Need an account? Create one'}
           </button>
         )}
-        <p className="auth-footnote">Your workspace is encrypted in transit and isolated to your signed-in account.</p>
+        <p className="auth-footnote">Personal boards are private. Shared boards are available only to invited members.</p>
       </section>
     </main>
   )

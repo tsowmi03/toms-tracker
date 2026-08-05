@@ -4,17 +4,18 @@ import type { TrackerData } from './types'
 
 const STORAGE_KEY = 'toms-tracker-data-v1'
 
-function storageKey(uid?: string) {
+function storageKey(uid?: string, boardId?: string) {
+  if (uid && boardId) return `${STORAGE_KEY}:user:${uid}:board:${boardId}`
   return uid ? `${STORAGE_KEY}:user:${uid}` : STORAGE_KEY
 }
 
-export function hasStoredData(uid?: string) {
-  return localStorage.getItem(storageKey(uid)) !== null
+export function hasStoredData(uid?: string, boardId?: string) {
+  return localStorage.getItem(storageKey(uid, boardId)) !== null
 }
 
-export function loadData(uid?: string): TrackerData {
+export function loadData(uid?: string, boardId?: string): TrackerData {
   try {
-    const stored = localStorage.getItem(storageKey(uid))
+    const stored = localStorage.getItem(storageKey(uid, boardId))
     if (!stored) return seedData
     const parsed = JSON.parse(stored) as TrackerData
     if (parsed.version !== 1 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.areas)) {
@@ -26,8 +27,8 @@ export function loadData(uid?: string): TrackerData {
   }
 }
 
-export function saveData(data: TrackerData, uid?: string) {
-  localStorage.setItem(storageKey(uid), JSON.stringify(data))
+export function saveData(data: TrackerData, uid?: string, boardId?: string) {
+  localStorage.setItem(storageKey(uid, boardId), JSON.stringify(data))
 }
 
 export function exportData(data: TrackerData) {

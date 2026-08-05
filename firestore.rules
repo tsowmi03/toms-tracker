@@ -2,9 +2,32 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isCurrentUser(userId) {
-      return request.auth != null
-        && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBoardMember(boardId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid));
+    }
+
+    function isBoardMemberAfter(boardId) {
+      return isSignedIn()
+        && getAfter(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid)).data.uid == request.auth.uid;
+    }
+
+    function isBoardOwner(boardId) {
+      return isBoardMember(boardId)
+        && get(/databases/$(database)/documents/boards/$(boardId)).data.ownerId == request.auth.uid;
+    }
+
+    function isBoardOwnerAfter(boardId) {
+      return isBoardMemberAfter(boardId)
+        && getAfter(/databases/$(database)/documents/boards/$(boardId)).data.ownerId == request.auth.uid;
     }
 
     function validArea() {
@@ -54,16 +77,104 @@ service cloud.firestore {
         && (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40));
     }
 
+    function validBoard() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['id', 'name', 'type', 'ownerId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'type', 'ownerId', 'createdAt', 'updatedAt'])
+        && data.id is string
+        && data.id.size() > 0
+        && data.id.size() <= 200
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.type in ['personal', 'shared']
+        && data.ownerId is string
+        && data.ownerId.size() > 0
+        && data.ownerId.size() <= 128
+        && data.createdAt is string
+        && data.createdAt.size() <= 40
+        && data.updatedAt is string
+        && data.updatedAt.size() <= 40;
+    }
+
+    function validMember(memberId) {
+      let data = request.resource.data;
+      return data.keys().hasAll(['uid', 'role', 'displayName', 'email', 'joinedAt'])
+        && data.keys().hasOnly(['uid', 'role', 'displayName', 'email', 'joinedAt', 'inviteId'])
+        && data.uid == memberId
+        && data.uid is string
+        && data.role in ['owner', 'member']
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && data.email is string
+        && data.email.size() <= 320
+        && data.joinedAt is string
+        && data.joinedAt.size() <= 40
+        && (!('inviteId' in data) || (data.inviteId is string && data.inviteId.size() <= 100));
+    }
+
+    function validBoardReference(boardId) {
+      let data = request.resource.data;
+      let board = getAfter(/databases/$(database)/documents/boards/$(boardId)).data;
+      let member = getAfter(/databases/$(database)/documents/boards/$(boardId)/members/$(request.auth.uid)).data;
+      return data.keys().hasAll([
+          'boardId', 'name', 'type', 'ownerId', 'role', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'boardId', 'name', 'type', 'ownerId', 'role', 'createdAt', 'updatedAt'
+        ])
+        && data.boardId == boardId
+        && data.name == board.name
+        && data.type == board.type
+        && data.ownerId == board.ownerId
+        && data.role == member.role
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    function validInvite(inviteId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'id', 'boardId', 'boardName', 'createdBy', 'createdAt', 'expiresAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'boardId', 'boardName', 'createdBy', 'createdAt', 'expiresAt'
+        ])
+        && data.id == inviteId
+        && data.id is string
+        && data.id.size() <= 100
+        && data.boardId is string
+        && data.boardName is string
+        && data.boardName.size() > 0
+        && data.boardName.size() <= 120
+        && data.createdBy == request.auth.uid
+        && data.createdAt is timestamp
+        && data.expiresAt is timestamp
+        && data.expiresAt > request.time
+        && data.expiresAt < request.time + duration.value(8, 'd');
+    }
+
+    function hasValidInvite(boardId) {
+      let inviteId = request.resource.data.inviteId;
+      let invite = get(/databases/$(database)/documents/boardInvites/$(inviteId)).data;
+      return inviteId is string
+        && invite.boardId == boardId
+        && invite.expiresAt is timestamp
+        && invite.expiresAt > request.time
+        && getAfter(/databases/$(database)/documents/boards/$(boardId)).data.type == 'shared';
+    }
+
     match /users/{userId} {
       allow read: if isCurrentUser(userId);
       allow create: if isCurrentUser(userId)
         && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
-        && request.resource.data.schemaVersion == 1;
+        && request.resource.data.schemaVersion in [1, 2];
       allow update: if isCurrentUser(userId)
         && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
-        && request.resource.data.schemaVersion == 1;
+        && request.resource.data.schemaVersion in [1, 2];
       allow delete: if false;
 
+      // Legacy data remains readable by its owner during the board migration.
       match /areas/{areaId} {
         allow read: if isCurrentUser(userId);
         allow create, update: if isCurrentUser(userId)
@@ -79,6 +190,79 @@ service cloud.firestore {
           && validTask();
         allow delete: if isCurrentUser(userId);
       }
+
+      match /boardRefs/{boardId} {
+        allow read: if isCurrentUser(userId);
+        allow create, update: if isCurrentUser(userId)
+          && validBoardReference(boardId);
+        allow delete: if isCurrentUser(userId) || isBoardOwner(boardId);
+      }
+    }
+
+    match /boards/{boardId} {
+      allow get, list: if isBoardMember(boardId);
+      allow create: if isSignedIn()
+        && request.resource.data.id == boardId
+        && request.resource.data.ownerId == request.auth.uid
+        && validBoard();
+      allow update: if isBoardOwner(boardId)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validBoard();
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if isBoardMember(boardId);
+        allow create: if isSignedIn()
+          && validMember(memberId)
+          && (
+            (memberId == request.auth.uid
+              && request.resource.data.role == 'owner'
+              && isBoardOwnerAfter(boardId))
+            ||
+            (memberId == request.auth.uid
+              && request.resource.data.role == 'member'
+              && hasValidInvite(boardId))
+          );
+        allow update: if false;
+        allow delete: if (
+            isBoardOwner(boardId)
+            && resource.data.role == 'member'
+          ) || (
+            memberId == request.auth.uid
+            && resource.data.role == 'member'
+          );
+      }
+
+      match /areas/{areaId} {
+        allow read: if isBoardMember(boardId);
+        allow create, update: if isBoardMemberAfter(boardId)
+          && request.resource.data.id == areaId
+          && validArea();
+        allow delete: if isBoardMember(boardId);
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isBoardMember(boardId);
+        allow create, update: if isBoardMemberAfter(boardId)
+          && request.resource.data.id == taskId
+          && validTask();
+        allow delete: if isBoardMember(boardId);
+      }
+    }
+
+    match /boardInvites/{inviteId} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn()
+        && validInvite(inviteId)
+        && isBoardOwner(request.resource.data.boardId)
+        && request.resource.data.boardName == get(/databases/$(database)/documents/boards/$(request.resource.data.boardId)).data.name
+        && get(/databases/$(database)/documents/boards/$(request.resource.data.boardId)).data.type == 'shared';
+      allow update: if false;
+      allow delete: if isBoardOwner(resource.data.boardId);
     }
 
     match /{document=**} {

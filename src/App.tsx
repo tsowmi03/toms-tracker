@@ -17,6 +17,8 @@ import {
   CloudIcon,
   DownloadIcon,
   InboxIcon,
+  LinkIcon,
+  LockIcon,
   LogOutIcon,
   MoreIcon,
   PlusIcon,
@@ -25,13 +27,21 @@ import {
   SlidersIcon,
   StarIcon,
   TodayIcon,
+  UsersIcon,
 } from './icons'
 import { AuthScreen } from './auth/AuthScreen'
 import { useAuth } from './auth/AuthContext'
 import { useTrackerData, type SyncState } from './data/useTrackerData'
+import {
+  createBoardInvite,
+  getBoardInvite,
+  leaveBoard,
+  removeBoardMember,
+  subscribeToBoardMembers,
+} from './data/trackerRepository'
 import { seedData } from './seed'
 import { exportData } from './storage'
-import type { Area, Priority, Status, Task, TrackerData, View } from './types'
+import type { Area, BoardInvite, BoardMember, BoardType, Priority, Status, Task, TaskBoard, TrackerData, View } from './types'
 
 const emptyTask = (status: Status, areaId: string): Task => {
   const now = new Date().toISOString()
@@ -96,20 +106,64 @@ function App() {
     <WorkspaceApp
       uid={auth.user?.uid}
       accountLabel={auth.user?.displayName || auth.user?.email || undefined}
+      displayName={auth.user?.displayName}
+      email={auth.user?.email}
       onSignOut={auth.configured ? auth.signOut : undefined}
     />
   )
 }
 
-function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountLabel?: string; onSignOut?: () => Promise<void> }) {
-  const { data, updateData: setData, ready, syncState, error: syncError } = useTrackerData(uid)
+function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut }: { uid?: string; accountLabel?: string; displayName?: string | null; email?: string | null; onSignOut?: () => Promise<void> }) {
+  const {
+    data,
+    updateData: setData,
+    boards,
+    activeBoard,
+    selectBoard,
+    addBoard,
+    joinBoard,
+    ready,
+    syncState,
+    error: syncError,
+  } = useTrackerData(uid, { displayName, email })
   const [view, setView] = useState<View>('board')
   const [query, setQuery] = useState('')
   const [areaFilter, setAreaFilter] = useState<string | undefined>()
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [editorTask, setEditorTask] = useState<Task | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [createBoardOpen, setCreateBoardOpen] = useState(false)
+  const [shareBoardOpen, setShareBoardOpen] = useState(false)
+  const [invite, setInvite] = useState<BoardInvite | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setEditorTask(null)
+    setAreaFilter(undefined)
+    setQuery('')
+  }, [activeBoard?.id])
+
+  useEffect(() => {
+    if (!uid || !ready) return
+    const inviteId = new URLSearchParams(window.location.search).get('invite')
+    if (!inviteId) return
+    const existingBoard = boards.find((board) => board.id === invite?.boardId)
+    if (existingBoard) {
+      selectBoard(existingBoard.id)
+      clearInviteFromUrl()
+      setInvite(null)
+      return
+    }
+    if (invite || inviteError) return
+    let active = true
+    void getBoardInvite(inviteId)
+      .then((nextInvite) => { if (active) setInvite(nextInvite) })
+      .catch((error: unknown) => {
+        if (active) setInviteError(error instanceof Error ? error.message : 'This invitation could not be opened.')
+      })
+    return () => { active = false }
+  }, [uid, ready, boards, invite?.boardId, selectBoard])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -144,6 +198,7 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
 
   if (!ready) return <AppLoading label="Loading your workspace…" />
   if (syncError && uid) return <WorkspaceError message={syncError} onSignOut={onSignOut} />
+  if (!activeBoard) return <WorkspaceError message="No task board is available for this account." onSignOut={onSignOut} />
 
   const openNewTask = (status: Status = view === 'inbox' ? 'inbox' : 'todo') => {
     setEditorTask(emptyTask(status, areaFilter ?? data.areas[0]?.id ?? ''))
@@ -214,6 +269,8 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
   }
 
   const areaName = data.areas.find((area) => area.id === areaFilter)?.name
+  const pageTitle = areaName ?? (view === 'board' ? activeBoard.name : viewTitles[view])
+  const boardContext = `${activeBoard.type === 'shared' ? 'Shared' : 'Personal'} board${activeBoard.role === 'member' ? ' · Member' : ''}`
 
   return (
     <div className="app-shell">
@@ -227,6 +284,10 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
           setView('board')
         }}
         tasks={data.tasks}
+        boards={boards}
+        activeBoard={activeBoard}
+        onBoard={selectBoard}
+        onAddBoard={() => setCreateBoardOpen(true)}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -236,6 +297,16 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
             <span className="brand-mark"><span /><span /><span /></span>
             <span>Tracker</span>
           </button>
+          <label className="board-switcher">
+            {activeBoard.type === 'shared' ? <UsersIcon /> : <LockIcon />}
+            <select value={activeBoard.id} onChange={(event) => {
+              if (event.target.value === '__new__') setCreateBoardOpen(true)
+              else selectBoard(event.target.value)
+            }} aria-label="Current task board">
+              {boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}
+              <option value="__new__">New task board…</option>
+            </select>
+          </label>
           <label className="search-box">
             <SearchIcon />
             <input
@@ -259,11 +330,14 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
         <main className="main-content">
           <div className="page-heading">
             <div>
-              <p className="eyebrow">{view === 'today' ? getDayLabel() : 'Personal workspace'}</p>
-              <h1>{areaName ?? viewTitles[view]}</h1>
+              <p className="eyebrow">{view === 'today' ? `${getDayLabel()} · ${boardContext}` : boardContext}</p>
+              <h1>{pageTitle}</h1>
               <p className="page-description">{areaName ? `Everything in ${areaName}.` : viewDescriptions[view]}</p>
             </div>
             <div className="heading-actions">
+              {activeBoard.type === 'shared' && (
+                <button className="board-members-button" onClick={() => setShareBoardOpen(true)}><UsersIcon />Members</button>
+              )}
               <label className="filter-select">
                 <SlidersIcon />
                 <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as Priority | 'all')} aria-label="Filter by priority">
@@ -340,6 +414,45 @@ function WorkspaceApp({ uid, accountLabel, onSignOut }: { uid?: string; accountL
           }}
         />
       )}
+
+      {createBoardOpen && (
+        <CreateBoardPanel
+          onClose={() => setCreateBoardOpen(false)}
+          onCreate={async (name, type) => {
+            await addBoard(name, type)
+            setCreateBoardOpen(false)
+          }}
+        />
+      )}
+
+      {shareBoardOpen && uid && activeBoard.type === 'shared' && (
+        <ShareBoardPanel
+          uid={uid}
+          board={activeBoard}
+          onClose={() => setShareBoardOpen(false)}
+          onLeft={() => {
+            setShareBoardOpen(false)
+          }}
+        />
+      )}
+
+      {(invite || inviteError) && (
+        <InvitePanel
+          invite={invite}
+          error={inviteError}
+          onClose={() => {
+            clearInviteFromUrl()
+            setInvite(null)
+            setInviteError(null)
+          }}
+          onJoin={async () => {
+            if (!invite) return
+            await joinBoard(invite.id)
+            clearInviteFromUrl()
+            setInvite(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -367,10 +480,14 @@ interface SidebarProps {
   areaFilter?: string
   onArea: (areaId: string) => void
   tasks: Task[]
+  boards: TaskBoard[]
+  activeBoard: TaskBoard
+  onBoard: (boardId: string) => void
+  onAddBoard: () => void
   onSettings: () => void
 }
 
-function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, onSettings }: SidebarProps) {
+function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, boards, activeBoard, onBoard, onAddBoard, onSettings }: SidebarProps) {
   const inboxCount = tasks.filter((task) => task.status === 'inbox').length
   const todayCount = tasks.filter((task) => task.status !== 'done' && (task.isFocus || isDueToday(task) || isOverdue(task))).length
 
@@ -380,6 +497,19 @@ function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, onSettings }:
         <span className="brand-mark"><span /><span /><span /></span>
         <span>Tom’s Tracker</span>
       </button>
+
+      <div className="sidebar-section board-list-section">
+        <div className="sidebar-section-title"><span>Task boards</span><button aria-label="Create task board" onClick={onAddBoard}><PlusIcon /></button></div>
+        <div className="area-list board-list">
+          {boards.map((board) => (
+            <button className={activeBoard.id === board.id ? 'active' : ''} key={board.id} onClick={() => onBoard(board.id)}>
+              {board.type === 'shared' ? <UsersIcon /> : <LockIcon />}
+              <span>{board.name}</span>
+              {board.role === 'member' && <span className="board-role">member</span>}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <nav className="sidebar-nav" aria-label="Main navigation">
         <NavButton active={view === 'today' && !areaFilter} icon={<TodayIcon />} label="Today" count={todayCount} onClick={() => onView('today')} />
@@ -402,8 +532,8 @@ function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, onSettings }:
 
       <div className="sidebar-footer">
         <div className="local-card">
-          <span className="local-icon"><CheckIcon /></span>
-          <div><strong>Private by default</strong><small>Stored on this device</small></div>
+          <span className="local-icon">{activeBoard.type === 'shared' ? <UsersIcon /> : <CheckIcon />}</span>
+          <div><strong>{activeBoard.type === 'shared' ? 'Shared workspace' : 'Private board'}</strong><small>{activeBoard.type === 'shared' ? 'Synced with board members' : 'Only you can access this board'}</small></div>
         </div>
         <button className="settings-button" onClick={onSettings}><SettingsIcon />Settings & data</button>
       </div>
@@ -641,6 +771,171 @@ function TaskEditor({ task, areas, onClose, onSave, onDelete }: { task: Task; ar
   )
 }
 
+function clearInviteFromUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('invite')
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+function CreateBoardPanel({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, type: BoardType) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<BoardType>('personal')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <form
+        className="settings-panel board-panel"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!name.trim()) return
+          setSubmitting(true)
+          setError(null)
+          void onCreate(name.trim(), type)
+            .catch(() => setError('The board could not be created. Check your connection and try again.'))
+            .finally(() => setSubmitting(false))
+        }}
+      >
+        <div className="editor-header"><div><span className="editor-kicker">New workspace</span><h2>Create a task board</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><CloseIcon /></button></div>
+        <div className="field full-field">
+          <label htmlFor="board-name">Board name</label>
+          <input id="board-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={120} placeholder="Home projects" required />
+        </div>
+        <fieldset className="board-type-options">
+          <legend>Access</legend>
+          <label className={type === 'personal' ? 'selected' : ''}>
+            <input type="radio" name="board-type" value="personal" checked={type === 'personal'} onChange={() => setType('personal')} />
+            <span><LockIcon /></span>
+            <div><strong>Personal</strong><small>Only you can access this board.</small></div>
+          </label>
+          <label className={type === 'shared' ? 'selected' : ''}>
+            <input type="radio" name="board-type" value="shared" checked={type === 'shared'} onChange={() => setType('shared')} />
+            <span><UsersIcon /></span>
+            <div><strong>Shared</strong><small>Invite other users to work on tasks together.</small></div>
+          </label>
+        </fieldset>
+        {error && <p className="panel-error" role="alert">{error}</p>}
+        <div className="panel-footer"><button type="button" className="cancel-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={submitting}>{submitting ? 'Creating…' : 'Create board'}</button></div>
+      </form>
+    </div>
+  )
+}
+
+function ShareBoardPanel({ uid, board, onClose, onLeft }: { uid: string; board: TaskBoard; onClose: () => void; onLeft: () => void }) {
+  const [members, setMembers] = useState<BoardMember[]>([])
+  const [inviteUrl, setInviteUrl] = useState('')
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [working, setWorking] = useState(false)
+
+  useEffect(() => subscribeToBoardMembers(
+    board.id,
+    setMembers,
+    () => setError('The member list could not be loaded.'),
+  ), [board.id])
+
+  const makeInvite = async () => {
+    setWorking(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const created = await createBoardInvite(board)
+      const url = new URL(window.location.origin)
+      url.searchParams.set('invite', created.id)
+      setInviteUrl(url.toString())
+      setExpiresAt(created.expiresAt)
+      try {
+        await navigator.clipboard.writeText(url.toString())
+        setNotice('Invite link copied. It expires in seven days.')
+      } catch {
+        setNotice('Invite link created. Copy it from the field below.')
+      }
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : 'An invite link could not be created.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="settings-panel board-panel">
+        <div className="editor-header"><div><span className="editor-kicker">Shared board</span><h2>{board.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><CloseIcon /></button></div>
+
+        {board.role === 'owner' && (
+          <div className="invite-section">
+            <div><strong>Invite another user</strong><p>Anyone with the link can join this board until it expires.</p></div>
+            <button className="primary-button" onClick={() => void makeInvite()} disabled={working}><LinkIcon />{working ? 'Creating…' : 'Create invite link'}</button>
+            {inviteUrl && <input className="invite-link" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invite link" />}
+            {expiresAt && <small>Expires {expiresAt.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</small>}
+          </div>
+        )}
+
+        {notice && <p className="panel-notice" role="status">{notice}</p>}
+        {error && <p className="panel-error" role="alert">{error}</p>}
+
+        <div className="member-section">
+          <div className="member-heading"><strong>Members</strong><span>{members.length}</span></div>
+          <div className="member-list">
+            {members.map((member) => (
+              <div className="member-row" key={member.uid}>
+                <span className="member-avatar">{(member.displayName || member.email || '?').slice(0, 1).toUpperCase()}</span>
+                <div><strong>{member.uid === uid ? 'You' : member.displayName || member.email || 'Board member'}</strong><small>{member.displayName && member.email ? member.email : member.role}</small></div>
+                <span className="member-role">{member.role}</span>
+                {board.role === 'owner' && member.role === 'member' && (
+                  <button
+                    className="remove-member"
+                    onClick={() => {
+                      if (!window.confirm(`Remove ${member.displayName || member.email || 'this member'} from the board?`)) return
+                      void removeBoardMember(board.id, member.uid).catch(() => setError('The member could not be removed.'))
+                    }}
+                  >Remove</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {board.role === 'member' && (
+          <div className="settings-danger"><div><strong>Leave board</strong><p>You will immediately lose access to its tasks.</p></div><button onClick={() => {
+            if (!window.confirm(`Leave ${board.name}?`)) return
+            void leaveBoard(uid, board.id).then(onLeft).catch(() => setError('The board could not be left.'))
+          }}>Leave</button></div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function InvitePanel({ invite, error, onClose, onJoin }: { invite: BoardInvite | null; error: string | null; onClose: () => void; onJoin: () => Promise<void> }) {
+  const [joining, setJoining] = useState(false)
+  const [joinError, setJoinError] = useState<string | null>(null)
+  return (
+    <div className="modal-backdrop">
+      <section className="settings-panel board-panel invite-panel">
+        <div className="editor-header"><div><span className="editor-kicker">Board invitation</span><h2>{invite ? `Join ${invite.boardName}?` : 'Invitation unavailable'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><CloseIcon /></button></div>
+        {invite ? (
+          <>
+            <div className="invite-summary"><UsersIcon /><div><strong>Shared task board</strong><p>You will be able to view and edit its tasks and areas. Other members will see your changes.</p></div></div>
+            {(joinError || error) && <p className="panel-error" role="alert">{joinError || error}</p>}
+            <div className="panel-footer"><button className="cancel-button" onClick={onClose}>Not now</button><button className="primary-button" disabled={joining} onClick={() => {
+              setJoining(true)
+              setJoinError(null)
+              void onJoin().catch((joinFailure) => {
+                setJoinError(joinFailure instanceof Error ? joinFailure.message : 'The board could not be joined.')
+              }).finally(() => setJoining(false))
+            }}>{joining ? 'Joining…' : 'Join board'}</button></div>
+          </>
+        ) : (
+          <><p className="panel-error" role="alert">{error}</p><div className="panel-footer"><button className="primary-button" onClick={onClose}>Close</button></div></>
+        )}
+      </section>
+    </div>
+  )
+}
+
 function SettingsPanel({ data, accountLabel, syncState, onSignOut, onClose, onReset }: { data: TrackerData; accountLabel?: string; syncState: SyncState; onSignOut?: () => Promise<void>; onClose: () => void; onReset: () => void }) {
   return (
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
@@ -654,7 +949,7 @@ function SettingsPanel({ data, accountLabel, syncState, onSignOut, onClose, onRe
           </div>
           <span className={`settings-sync-dot sync-${syncState}`} />
         </div>
-        <button className="settings-action" onClick={() => exportData(data)}><span><DownloadIcon /></span><div><strong>Export backup</strong><small>Download all tasks and areas as JSON</small></div><b>→</b></button>
+        <button className="settings-action" onClick={() => exportData(data)}><span><DownloadIcon /></span><div><strong>Export current board</strong><small>Download this board’s tasks and areas as JSON</small></div><b>→</b></button>
         <div className="settings-stats">
           <div><strong>{data.tasks.length}</strong><span>Total tasks</span></div>
           <div><strong>{data.tasks.filter((task) => task.status === 'done').length}</strong><span>Completed</span></div>
