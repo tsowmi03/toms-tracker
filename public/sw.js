@@ -1,6 +1,5 @@
-const CACHE = 'tracker-shell-v2'
+const CACHE = 'tracker-shell-v3'
 const SHELL = [
-  '/',
   '/manifest.webmanifest',
   '/tracker-icon.svg',
   '/tracker-icon-192.png',
@@ -9,7 +8,7 @@ const SHELL = [
 
 async function cacheApplicationShell() {
   const cache = await caches.open(CACHE)
-  const response = await fetch('/index.html')
+  const response = await fetch('/index.html', { cache: 'no-store' })
   const html = await response.clone().text()
   const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map((match) => match[1])
   await cache.put('/index.html', response)
@@ -22,12 +21,17 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))),
-    ),
-  )
-  self.clients.claim()
+  event.waitUntil((async () => {
+    const keys = await caches.keys()
+    const hadPreviousShell = keys.some((key) => key.startsWith('tracker-shell-') && key !== CACHE)
+    await Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
+    await self.clients.claim()
+
+    if (hadPreviousShell) {
+      const windows = await self.clients.matchAll({ type: 'window' })
+      await Promise.all(windows.map((client) => client.navigate(client.url)))
+    }
+  })())
 })
 
 self.addEventListener('fetch', (event) => {
@@ -36,7 +40,7 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html')),
+      fetch(event.request, { cache: 'no-store' }).catch(() => caches.match('/index.html')),
     )
     return
   }
