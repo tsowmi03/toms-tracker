@@ -27,6 +27,27 @@ vi.mock('./data/useTrackerData', () => ({
       areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }],
       tasks: [],
     },
+    boards: [{
+      id: 'personal-user-uid',
+      name: 'My tasks',
+      type: 'personal',
+      ownerId: 'user-uid',
+      role: 'owner',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }],
+    activeBoard: {
+      id: 'personal-user-uid',
+      name: 'My tasks',
+      type: 'personal',
+      ownerId: 'user-uid',
+      role: 'owner',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    },
+    selectBoard: () => undefined,
+    addBoard: async () => 'board-id',
+    joinBoard: async () => 'board-id',
     updateData: () => undefined,
     ready: trackerState.ready,
     syncState: 'synced',
@@ -55,7 +76,7 @@ describe('authenticated workspace', () => {
     trackerState.ready = true
     await act(async () => root?.render(<App />))
 
-    expect(container.textContent).toContain('Life board')
+    expect(container.textContent).toContain('My tasks')
     expect(container.textContent).toContain('Drop a task here')
   })
 })

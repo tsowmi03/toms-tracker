@@ -24,9 +24,13 @@ if (!rules.includes('request.auth.uid == userId')) {
   console.error('Firestore rules are not scoped to each signed-in user.')
   process.exit(1)
 }
+if (!rules.includes('isBoardMember(boardId)') || !rules.includes('match /boardInvites/{inviteId}')) {
+  console.error('Firestore rules do not contain the shared-board membership boundary.')
+  process.exit(1)
+}
 if (/request\.auth\.uid\s*==\s*['"]/.test(rules)) {
   console.error('Firestore rules still contain a hard-coded user UID.')
   process.exit(1)
 }
 
-console.log('Production Firebase configuration and per-user rules are ready.')
+console.log('Production Firebase configuration and board-membership rules are ready.')

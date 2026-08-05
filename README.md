@@ -1,6 +1,6 @@
 # Tom's Tracker
 
-A local-first, Jira-inspired personal task tracker with Firebase authentication and cross-device sync.
+A local-first, Jira-inspired task tracker with personal and shared boards, Firebase authentication, and cross-device sync.
 
 ## Production infrastructure
 
@@ -32,12 +32,18 @@ Without Firebase environment values, the app runs in local development mode and 
 
 ## Firebase architecture
 
-The live application uses Firebase Authentication and Cloud Firestore. Every account has an independent workspace, with each task and area stored beneath that user's Firebase UID:
+The live application uses Firebase Authentication and Cloud Firestore. A small reference under each user lists the boards available to that account. Board content and membership live under the board itself:
 
 ```text
 users/{userId}
+└── boardRefs/{boardId}
+
+boards/{boardId}
+├── members/{userId}
 ├── areas/{areaId}
 └── tasks/{taskId}
+
+boardInvites/{randomInviteToken}
 ```
 
 ### Local configuration
@@ -48,17 +54,23 @@ For a production build, use `.env.production.local` with the same variables and 
 
 Firebase Web configuration values identify the project and are shipped to the browser. They are not server credentials. Firestore Security Rules are the data-access boundary.
 
-### Per-user isolation
+### Board access
 
-Firestore rules require the authenticated UID to match the `{userId}` in every document path. Users cannot list, read, create, update, or delete another user's profile, areas, or tasks.
+Firestore rules still require the authenticated UID to match `{userId}` for profiles and board references. Personal and shared board content uses membership documents as the access boundary:
 
-There are no shared boards, workspace memberships, or cross-user task queries. Every account is independent.
+- Personal boards have only their owner as a member and cannot create invites.
+- Shared boards allow every member to read and edit tasks and areas.
+- Only the owner can create invite links or remove members.
+- Members can leave a shared board themselves.
+- Invite documents can be opened only by exact, cryptographically random token and cannot be listed.
+- Invite links expire after seven days.
+- Removing or leaving a board immediately blocks access to its content. Removing a member also revokes the invite they used.
 
 The production build gate checks that:
 
 - Required Firebase values are present.
 - Account registration is enabled for the production build.
-- Firestore rules use per-user UID matching and contain no hard-coded account UID.
+- Firestore rules use per-user UID matching and board-membership checks, with no hard-coded account UID.
 
 ## Validate and deploy
 
@@ -73,9 +85,12 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 
 ## Storage and migration behaviour
 
-- A new account starts with the standard areas and no sample tasks.
-- Each account's browser mirror uses a UID-scoped storage key, preventing account switching from exposing or copying another user's cached data.
-- The user profile document records that initialisation has occurred, preventing deleted tasks from being recreated later.
+- A new account starts with a personal board containing the standard areas and no sample tasks.
+- Users can create additional personal boards or shared boards.
+- Existing per-user tasks and areas are copied into the first personal board on first use. Legacy documents remain in place as a rollback source.
+- Migration is resumable and is marked complete only after every task and area is copied.
+- Each board's browser mirror is scoped by both UID and board ID, preventing account or board switching from exposing the wrong cached data.
+- Shared boards are joined through an expiring link; no email address directory is exposed to clients.
 - Firestore realtime listeners keep signed-in devices current.
 - Firestore's persistent browser cache keeps established devices usable offline and queues changes for later synchronisation.
 - The app maintains a local mirror and supports manual JSON backup export.
@@ -96,10 +111,11 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 - Responsive desktop and mobile interface
 - Installable web app manifest and same-origin offline shell
 - Email/password and Google authentication
-- Self-service accounts with per-user client and Firestore isolation
+- Multiple personal and shared task boards
+- Expiring invite links and shared-board member management
+- Membership-scoped Firestore access
 - Realtime per-document Firestore sync
-- Multi-tab persistent Firestore cache
-- UID-scoped offline browser mirrors
+- Multi-tab persistent Firestore cache and per-board offline mirrors
 - Drag-and-drop Kanban board on desktop
 - Task editing with areas, priorities, dates, notes, tags, and daily focus
 - Search, filtering, local mirroring, and JSON backup export
