@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   onSnapshot,
   query,
@@ -32,6 +33,10 @@ import type {
 const SCHEMA_VERSION = 2
 const MAX_BATCH_OPERATIONS = 220
 const INVITE_LIFETIME_DAYS = 7
+// Security rules resolve membership with exists()/get() lookups that can read
+// slightly stale data, so a board a user *does* belong to can briefly answer
+// permission-denied. Confirm a removal twice before discarding a board pointer.
+const MEMBERSHIP_RECHECK_DELAY_MS = 1500
 
 export interface MemberIdentity {
   displayName?: string | null
@@ -358,25 +363,54 @@ export async function getBoardInvite(inviteId: string): Promise<BoardInvite> {
   }
 }
 
+function errorCode(error: unknown) {
+  return error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+}
+
+/**
+ * Reads the caller's own membership straight from the server. A
+ * permission-denied answer means the rules do not currently see the caller as a
+ * member, which is reported as `null` rather than thrown.
+ */
+async function readOwnMembership(db: Firestore, boardId: string, uid: string) {
+  try {
+    const snapshot = await getDocFromServer(doc(db, 'boards', boardId, 'members', uid))
+    return snapshot.exists() ? memberFromDocument(uid, snapshot.data()) : null
+  } catch (error) {
+    if (errorCode(error) === 'permission-denied') return null
+    throw error
+  }
+}
+
 export async function acceptBoardInvite(uid: string, identity: MemberIdentity, inviteId: string) {
   const { db } = servicesOrThrow()
   const invite = await getBoardInvite(inviteId)
   const now = new Date().toISOString()
+
+  // A member whose board pointer went missing can re-open their invite link to
+  // repair it. Their membership document already exists and rules forbid
+  // rewriting it, so only the pointer is restored in that case.
+  const membership = await readOwnMembership(db, invite.boardId, uid).catch(() => null)
+  const liveBoard = membership ? await getDoc(doc(db, 'boards', invite.boardId)).catch(() => null) : null
+  const boardData = liveBoard?.data()
+
   const board: Omit<TaskBoard, 'role'> = {
     id: invite.boardId,
-    name: invite.boardName,
+    name: String(boardData?.name ?? invite.boardName),
     type: 'shared',
-    ownerId: invite.createdBy,
-    createdAt: now,
-    updatedAt: now,
+    ownerId: String(boardData?.ownerId ?? invite.createdBy),
+    createdAt: String(boardData?.createdAt ?? now),
+    updatedAt: String(boardData?.updatedAt ?? now),
   }
 
   const batch = writeBatch(db)
-  batch.set(doc(db, 'boards', board.id, 'members', uid), {
-    ...identityFields(uid, identity, 'member', now),
-    inviteId,
-  })
-  batch.set(doc(db, 'users', uid, 'boardRefs', board.id), boardReferenceFields(board, 'member'))
+  if (!membership) {
+    batch.set(doc(db, 'boards', board.id, 'members', uid), {
+      ...identityFields(uid, identity, 'member', now),
+      inviteId,
+    })
+  }
+  batch.set(doc(db, 'users', uid, 'boardRefs', board.id), boardReferenceFields(board, membership?.role ?? 'member'))
   await batch.commit()
   return board.id
 }
@@ -418,7 +452,26 @@ async function clearTaskAssignments(db: Firestore, boardId: string, memberUid: s
   }
 }
 
+/**
+ * Drops a board pointer only once the server confirms, twice, that the user is
+ * no longer a member. A single permission-denied is not proof of removal: rules
+ * membership lookups can read stale data, and treating a transient denial as a
+ * removal silently strips a genuine member of a board they still belong to.
+ * Returns whether the pointer was actually removed.
+ */
 export async function removeStaleBoardReference(uid: string, boardId: string) {
   const { db } = servicesOrThrow()
+
+  try {
+    if (await readOwnMembership(db, boardId, uid)) return false
+    await new Promise((resolve) => setTimeout(resolve, MEMBERSHIP_RECHECK_DELAY_MS))
+    if (await readOwnMembership(db, boardId, uid)) return false
+  } catch {
+    // The membership could not be reached (offline, transport failure). Keep the
+    // pointer: a board is only unlinked on a positive answer, never on silence.
+    return false
+  }
+
   await deleteDoc(doc(db, 'users', uid, 'boardRefs', boardId))
+  return true
 }

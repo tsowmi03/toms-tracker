@@ -152,6 +152,25 @@ describe('Firestore task-board membership rules', () => {
     await assertSucceeds(getDocs(collection(aliceDatabase, 'boards', boardId, 'tasks')))
   })
 
+  it('lets a member whose board pointer went missing restore it on its own', async () => {
+    const aliceDatabase = environment.authenticatedContext(aliceUid).firestore()
+    const bobDatabase = environment.authenticatedContext(bobUid).firestore()
+    await createOwnedBoard(aliceDatabase, aliceUid)
+    await createInvite(aliceDatabase)
+    await acceptInvite(bobDatabase, bobUid)
+
+    // The pointer is lost while the membership survives, which is the state a
+    // transient permission-denied used to leave behind.
+    await assertSucceeds(deleteDoc(doc(bobDatabase, 'users', bobUid, 'boardRefs', boardId)))
+    await assertSucceeds(getDoc(doc(bobDatabase, 'boards', boardId, 'members', bobUid)))
+
+    // Rewriting the surviving membership is still refused, so the repair must
+    // restore the pointer by itself.
+    await assertFails(setDoc(doc(bobDatabase, 'boards', boardId, 'members', bobUid), memberFields(bobUid, 'member', 'invite-token')))
+    await assertSucceeds(setDoc(doc(bobDatabase, 'users', bobUid, 'boardRefs', boardId), referenceFields(boardId, aliceUid, 'member')))
+    await assertSucceeds(getDoc(doc(bobDatabase, 'boards', boardId)))
+  })
+
   it('does not let an invite grant access to the wrong user role or board', async () => {
     const aliceDatabase = environment.authenticatedContext(aliceUid).firestore()
     const bobDatabase = environment.authenticatedContext(bobUid).firestore()
