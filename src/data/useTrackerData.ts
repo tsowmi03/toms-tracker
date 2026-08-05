@@ -125,11 +125,13 @@ export function useTrackerData(uid?: string, identity: MemberIdentity = {}) {
       (boardError) => {
         if (!active) return
         const code = 'code' in boardError ? String(boardError.code) : ''
+        setError('This board could not be loaded. Check your connection and try again.')
         if (code === 'permission-denied') {
-          void removeStaleBoardReference(uid, activeBoardId)
-          setError('You no longer have access to this board.')
-        } else {
-          setError('This board could not be loaded. Check your connection and try again.')
+          // Only a confirmed removal unlinks the board, so wait for the verdict
+          // before telling the user their access is gone.
+          void removeStaleBoardReference(uid, activeBoardId).then((removed) => {
+            if (active && removed) setError('You no longer have access to this board.')
+          }).catch(() => {})
         }
         setSyncState('error')
         setBoardReady(true)
