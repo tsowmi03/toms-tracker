@@ -11,7 +11,7 @@ import {
 export type SyncState = 'local' | 'loading' | 'syncing' | 'synced' | 'offline' | 'error'
 
 export function useTrackerData(uid?: string) {
-  const [data, setData] = useState<TrackerData>(loadData)
+  const [data, setData] = useState<TrackerData>(() => loadData(uid))
   const dataReference = useRef(data)
   const [ready, setReady] = useState(!uid)
   const [syncState, setSyncState] = useState<SyncState>(uid ? 'loading' : 'local')
@@ -30,8 +30,8 @@ export function useTrackerData(uid?: string) {
     setSyncState('loading')
     setError(null)
 
-    const initialCloudData = hasStoredData()
-      ? loadData()
+    const initialCloudData = hasStoredData(uid)
+      ? loadData(uid)
       : { ...seedData, tasks: [] }
 
     void initialiseWorkspace(uid, initialCloudData)
@@ -43,7 +43,7 @@ export function useTrackerData(uid?: string) {
             if (!active) return
             dataReference.current = cloudData
             setData(cloudData)
-            saveData(cloudData)
+            saveData(cloudData, uid)
             setReady(true)
             setSyncState(navigator.onLine ? (hasPendingWrites ? 'syncing' : 'synced') : 'offline')
           },
@@ -82,7 +82,7 @@ export function useTrackerData(uid?: string) {
     const next = updater(previous)
     dataReference.current = next
     setData(next)
-    saveData(next)
+    saveData(next, uid)
 
     if (!uid) {
       setSyncState('local')

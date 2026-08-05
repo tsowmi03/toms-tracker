@@ -25,7 +25,6 @@ const requiredConfig = [
 ]
 
 export const firebaseConfigured = requiredConfig.every(Boolean)
-export const firebaseOwnerUid = import.meta.env.VITE_FIREBASE_OWNER_UID?.trim() || undefined
 export const signUpEnabled = import.meta.env.VITE_ALLOW_SIGN_UP === 'true'
 
 export interface FirebaseServices {

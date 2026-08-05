@@ -7,7 +7,6 @@ const required = [
   'VITE_FIREBASE_AUTH_DOMAIN',
   'VITE_FIREBASE_PROJECT_ID',
   'VITE_FIREBASE_APP_ID',
-  'VITE_FIREBASE_OWNER_UID',
 ]
 const missing = required.filter((key) => !env[key]?.trim())
 if (missing.length) {
@@ -15,14 +14,19 @@ if (missing.length) {
   process.exit(1)
 }
 
-const rules = fs.readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8')
-if (rules.includes('REPLACE_WITH_FIREBASE_OWNER_UID')) {
-  console.error('firestore.rules still contains the owner UID placeholder.')
-  process.exit(1)
-}
-if (!rules.includes(`request.auth.uid == '${env.VITE_FIREBASE_OWNER_UID}'`)) {
-  console.error('The Firestore owner UID does not match VITE_FIREBASE_OWNER_UID.')
+if (env.VITE_ALLOW_SIGN_UP !== 'true') {
+  console.error('Production account registration is disabled. Set VITE_ALLOW_SIGN_UP=true.')
   process.exit(1)
 }
 
-console.log('Production Firebase configuration and owner rule are ready.')
+const rules = fs.readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8')
+if (!rules.includes('request.auth.uid == userId')) {
+  console.error('Firestore rules are not scoped to each signed-in user.')
+  process.exit(1)
+}
+if (/request\.auth\.uid\s*==\s*['"]/.test(rules)) {
+  console.error('Firestore rules still contain a hard-coded user UID.')
+  process.exit(1)
+}
+
+console.log('Production Firebase configuration and per-user rules are ready.')

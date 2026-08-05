@@ -2,10 +2,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isOwner(userId) {
+    function isCurrentUser(userId) {
       return request.auth != null
-        && request.auth.uid == userId
-        && request.auth.uid == 'URmG3ELER5YzUrwjLiYy3vl1ags1';
+        && request.auth.uid == userId;
     }
 
     function validArea() {
@@ -56,29 +55,29 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId)
+      allow read: if isCurrentUser(userId);
+      allow create: if isCurrentUser(userId)
         && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
         && request.resource.data.schemaVersion == 1;
-      allow update: if isOwner(userId)
+      allow update: if isCurrentUser(userId)
         && request.resource.data.keys().hasOnly(['schemaVersion', 'createdAt', 'updatedAt'])
         && request.resource.data.schemaVersion == 1;
       allow delete: if false;
 
       match /areas/{areaId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read: if isCurrentUser(userId);
+        allow create, update: if isCurrentUser(userId)
           && request.resource.data.id == areaId
           && validArea();
-        allow delete: if isOwner(userId);
+        allow delete: if isCurrentUser(userId);
       }
 
       match /tasks/{taskId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read: if isCurrentUser(userId);
+        allow create, update: if isCurrentUser(userId)
           && request.resource.data.id == taskId
           && validTask();
-        allow delete: if isOwner(userId);
+        allow delete: if isCurrentUser(userId);
       }
     }
 
