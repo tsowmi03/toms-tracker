@@ -206,6 +206,7 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
 .due-chip.overdue { color: #cf4f37; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .tag-row span { color: #8a7fb0; font-size: 8px; }
+.mobile-move-control, .mobile-empty-copy { display: none; }
 .column-empty { display: grid; place-items: center; min-height: 78px; border: 1px dashed #d4d0c6; border-radius: 9px; color: #aaa89e; font-size: 10px; }
 .column-add { height: 31px; display: flex; align-items: center; gap: 7px; border: 0; padding: 0 5px; color: #a09f96; background: transparent; font-size: 10px; }
 .column-add:hover { color: var(--ink); }
@@ -555,6 +556,11 @@ kbd { padding: 3px 6px; border: 1px solid #ddd9cf; border-radius: 5px; color: #9
   .board::-webkit-scrollbar { display: none; }
   .board-column { min-height: 470px; scroll-snap-align: start; }
   .focus-button { opacity: 1; }
+  .desktop-empty-copy { display: none; }
+  .mobile-empty-copy { display: inline; }
+  .mobile-move-control { min-height: 44px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin: 13px -5px -5px; border-top: 1px solid var(--line-soft); padding: 9px 5px 0; color: var(--muted); font-size: 10px; font-weight: 700; cursor: default; }
+  .mobile-move-control select { width: 100%; min-height: 35px; appearance: none; border: 1px solid var(--line); border-radius: 8px; outline: 0; padding: 0 30px 0 10px; color: var(--ink); background: var(--canvas) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='m1 1 4 4 4-4' fill='none' stroke='%2377766e' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center; font: 700 11px 'Avenir Next', Avenir, sans-serif; }
+  .mobile-move-control select:focus-visible { border-color: var(--orange); box-shadow: 0 0 0 3px rgb(239 99 52 / 14%); }
   .today-summary { margin-bottom: 22px; }
   .task-card.wide { grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; gap: 5px 10px; }
   .task-card.wide .task-topline { grid-column: 1; grid-row: 1; justify-content: flex-start; }

@@ -4,10 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import type { Task } from './types'
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const trackerState = vi.hoisted(() => ({ ready: false, sharedBoard: false, updateData: vi.fn(), selectBoard: vi.fn(), signOut: vi.fn() }))
+const trackerState = vi.hoisted(() => ({ ready: false, sharedBoard: false, tasks: [] as Task[], updateData: vi.fn(), selectBoard: vi.fn(), signOut: vi.fn() }))
 
 vi.mock('./auth/AuthContext', () => ({
   useAuth: () => ({
@@ -45,7 +46,7 @@ vi.mock('./data/useTrackerData', () => ({
     data: {
       version: 1,
       areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }],
-      tasks: [],
+      tasks: trackerState.tasks,
     },
     boards: [board, secondBoard],
     activeBoard: board,
@@ -82,6 +83,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
   trackerState.ready = false
   trackerState.sharedBoard = false
+  trackerState.tasks = []
   trackerState.updateData.mockReset()
   trackerState.selectBoard.mockReset()
   trackerState.signOut.mockReset()
@@ -140,6 +142,39 @@ describe('authenticated workspace', () => {
 
     expect(trackerState.selectBoard).toHaveBeenCalledWith('shared-family')
     expect(container.querySelector('#mobile-board-panel-title')).toBeNull()
+  })
+
+  it('lets mobile users move a board card with its column selector', async () => {
+    trackerState.ready = true
+    trackerState.tasks = [{
+      id: 'task-one',
+      title: 'Prepare notes',
+      description: '',
+      status: 'todo',
+      priority: 'none',
+      areaId: 'personal',
+      tags: [],
+      isFocus: false,
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }]
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(<App />))
+    const moveSelect = container.querySelector<HTMLSelectElement>('[aria-label="Move Prepare notes to another column"]')
+    expect(moveSelect).not.toBeNull()
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(moveSelect, 'progress')
+      moveSelect?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(trackerState.updateData).toHaveBeenCalledTimes(1)
+    const updater = trackerState.updateData.mock.calls[0][0]
+    const updated = updater({ version: 1, areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }], tasks: trackerState.tasks })
+    expect(updated.tasks[0]).toEqual(expect.objectContaining({ id: 'task-one', status: 'progress' }))
   })
 
   it('lets mobile users open settings and sign out', async () => {

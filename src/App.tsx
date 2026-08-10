@@ -662,8 +662,10 @@ function BoardView({ tasks, areas, onOpen, onNew, onMove, onToggleFocus }: TaskC
               <button aria-label={`Add task to ${status.label}`} onClick={() => onNew(status.id)}><PlusIcon /></button>
             </div>
             <div className="task-stack">
-              {columnTasks.map((task) => <TaskCard key={task.id} task={task} areas={areas} onOpen={onOpen} onMove={onMove} onToggleFocus={onToggleFocus} />)}
-              {columnTasks.length === 0 && <div className="column-empty">Drop a task here</div>}
+              {columnTasks.map((task) => <TaskCard key={task.id} task={task} areas={areas} onOpen={onOpen} onMove={onMove} onToggleFocus={onToggleFocus} mobileMove />)}
+              {columnTasks.length === 0 && (
+                <div className="column-empty"><span className="desktop-empty-copy">Drop a task here</span><span className="mobile-empty-copy">No tasks here</span></div>
+              )}
               <button className="column-add" onClick={() => onNew(status.id)}><PlusIcon />Add task</button>
             </div>
           </section>
@@ -731,7 +733,7 @@ function TaskList({ title, subtitle, tasks, areas, onOpen, onMove, onToggleFocus
   )
 }
 
-function TaskCard({ task, areas, onOpen, onMove, onToggleFocus, wide = false }: { task: Task; areas: Area[]; onOpen: (task: Task) => void; onMove: (taskId: string, status: Status) => void; onToggleFocus: (taskId: string) => void; wide?: boolean }) {
+function TaskCard({ task, areas, onOpen, onMove, onToggleFocus, wide = false, mobileMove = false }: { task: Task; areas: Area[]; onOpen: (task: Task) => void; onMove: (taskId: string, status: Status) => void; onToggleFocus: (taskId: string) => void; wide?: boolean; mobileMove?: boolean }) {
   const area = areas.find((item) => item.id === task.areaId)
   const overdue = isOverdue(task)
   const dueText = formatDueDate(task.dueDate)
@@ -761,6 +763,18 @@ function TaskCard({ task, areas, onOpen, onMove, onToggleFocus, wide = false }: 
         {dueText && <span className={`due-chip ${overdue ? 'overdue' : ''}`}><CalendarIcon />{overdue ? 'Overdue' : dueText}</span>}
       </div>
       {task.tags.length > 0 && <div className="tag-row">{task.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
+      {mobileMove && (
+        <label className="mobile-move-control" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          <span>Move to</span>
+          <select
+            aria-label={`Move ${task.title} to another column`}
+            value={task.status}
+            onChange={(event) => onMove(task.id, event.target.value as Status)}
+          >
+            {STATUSES.map((status) => <option value={status.id} key={status.id}>{status.label}</option>)}
+          </select>
+        </label>
+      )}
       {wide && (
         <button className="complete-button" aria-label="Mark done" onClick={(event) => { event.stopPropagation(); onMove(task.id, 'done') }}><CheckIcon /></button>
       )}
