@@ -1,8 +1,9 @@
 import { seedData } from './seed'
 import { localDateKey } from './board'
-import type { TrackerData } from './types'
+import type { TaskSort, TrackerData } from './types'
 
 const STORAGE_KEY = 'toms-tracker-data-v1'
+const SORT_STORAGE_KEY = 'toms-tracker-sort-v1'
 
 function storageKey(uid?: string, boardId?: string) {
   if (uid && boardId) return `${STORAGE_KEY}:user:${uid}:board:${boardId}`
@@ -29,6 +30,19 @@ export function loadData(uid?: string, boardId?: string): TrackerData {
 
 export function saveData(data: TrackerData, uid?: string, boardId?: string) {
   localStorage.setItem(storageKey(uid, boardId), JSON.stringify(data))
+}
+
+function sortStorageKey(uid: string | undefined, boardId: string) {
+  return `${SORT_STORAGE_KEY}:${uid ?? 'local'}:board:${boardId}`
+}
+
+export function loadSortPreference(uid: string | undefined, boardId: string): TaskSort {
+  const stored = localStorage.getItem(sortStorageKey(uid, boardId))
+  return stored === 'dueDate' || stored === 'createdAt' ? stored : 'priority'
+}
+
+export function saveSortPreference(sortBy: TaskSort, uid: string | undefined, boardId: string) {
+  localStorage.setItem(sortStorageKey(uid, boardId), sortBy)
 }
 
 export function exportData(data: TrackerData) {

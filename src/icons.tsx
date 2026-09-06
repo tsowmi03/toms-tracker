@@ -20,6 +20,7 @@ export const CalendarIcon = (props: IconProps) => <Icon {...props}><rect x="3" y
 export const StarIcon = (props: IconProps) => <Icon {...props}><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.9L12 3Z" /></Icon>
 export const CheckIcon = (props: IconProps) => <Icon {...props}><path d="m5 12 4 4L19 6" /></Icon>
 export const SlidersIcon = (props: IconProps) => <Icon {...props}><path d="M4 7h10m4 0h2M4 17h2m4 0h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></Icon>
+export const SortIcon = (props: IconProps) => <Icon {...props}><path d="M4 7h12M4 12h9M4 17h6" /><path d="m17 14 3 3 3-3M20 17V7" /></Icon>
 export const CloseIcon = (props: IconProps) => <Icon {...props}><path d="m6 6 12 12M18 6 6 18" /></Icon>
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M5 19h14" /></Icon>
 export const CloudIcon = (props: IconProps) => <Icon {...props}><path d="M17.5 19H7a5 5 0 1 1 1.2-9.85A6 6 0 0 1 19.8 11 4 4 0 0 1 17.5 19Z" /></Icon>

@@ -7,7 +7,9 @@ import {
   localDateKey,
   moveTask,
   PRIORITIES,
+  sortTasks,
   STATUSES,
+  TASK_SORTS,
 } from './board'
 import {
   BoardIcon,
@@ -25,6 +27,7 @@ import {
   SearchIcon,
   SettingsIcon,
   SlidersIcon,
+  SortIcon,
   StarIcon,
   SunIcon,
   TodayIcon,
@@ -41,9 +44,9 @@ import {
   subscribeToBoardMembers,
 } from './data/trackerRepository'
 import { seedData } from './seed'
-import { exportData } from './storage'
+import { exportData, loadSortPreference, saveSortPreference } from './storage'
 import { getPreferredTheme, saveTheme, type Theme } from './theme'
-import type { Area, BoardInvite, BoardMember, BoardType, Priority, Status, Task, TaskBoard, TrackerData, View } from './types'
+import type { Area, BoardInvite, BoardMember, BoardType, Priority, Status, Task, TaskBoard, TaskSort, TrackerData, View } from './types'
 
 const emptyTask = (status: Status, areaId: string): Task => {
   const now = new Date().toISOString()
@@ -137,6 +140,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
   const [query, setQuery] = useState('')
   const [areaFilter, setAreaFilter] = useState<string | undefined>()
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
+  const [sortBy, setSortBy] = useState<TaskSort>('priority')
   const [editorTask, setEditorTask] = useState<Task | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileBoardsOpen, setMobileBoardsOpen] = useState(false)
@@ -153,7 +157,8 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
     setEditorTask(null)
     setAreaFilter(undefined)
     setQuery('')
-  }, [activeBoard?.id])
+    if (activeBoard) setSortBy(loadSortPreference(uid, activeBoard.id))
+  }, [activeBoard?.id, uid])
 
   useEffect(() => {
     if (!activeBoard || activeBoard.type !== 'shared') {
@@ -216,8 +221,8 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
   }, [data.areas, view])
 
   const visibleTasks = useMemo(
-    () => filterTasks(data.tasks, { query, areaId: areaFilter, priority: priorityFilter }),
-    [data.tasks, query, areaFilter, priorityFilter],
+    () => sortTasks(filterTasks(data.tasks, { query, areaId: areaFilter, priority: priorityFilter }), sortBy),
+    [data.tasks, query, areaFilter, priorityFilter, sortBy],
   )
 
   if (!ready) return <AppLoading label="Loading your workspace…" />
@@ -382,6 +387,16 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
               {activeBoard.type === 'shared' && (
                 <button className="board-members-button" onClick={() => setShareBoardOpen(true)}><UsersIcon />Members</button>
               )}
+              <label className="filter-select" title="Sort tasks">
+                <SortIcon />
+                <select value={sortBy} onChange={(event) => {
+                  const nextSort = event.target.value as TaskSort
+                  setSortBy(nextSort)
+                  saveSortPreference(nextSort, uid, activeBoard.id)
+                }} aria-label="Sort tasks by">
+                  {TASK_SORTS.map((sort) => <option value={sort.id} key={sort.id}>{sort.label}</option>)}
+                </select>
+              </label>
               <label className="filter-select">
                 <SlidersIcon />
                 <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as Priority | 'all')} aria-label="Filter by priority">

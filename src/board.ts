@@ -1,4 +1,4 @@
-import type { Priority, Status, Task } from './types'
+import type { Priority, Status, Task, TaskSort } from './types'
 
 export const STATUSES: { id: Exclude<Status, 'inbox'>; label: string; description: string }[] = [
   { id: 'todo', label: 'To do', description: 'Ready when you are' },
@@ -14,6 +14,55 @@ export const PRIORITIES: { id: Priority; label: string }[] = [
   { id: 'high', label: 'High' },
   { id: 'urgent', label: 'Urgent' },
 ]
+
+export const TASK_SORTS: { id: TaskSort; label: string }[] = [
+  { id: 'priority', label: 'Priority' },
+  { id: 'dueDate', label: 'Due date' },
+  { id: 'createdAt', label: 'Date created' },
+]
+
+const priorityOrder: Record<Priority, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  none: 4,
+}
+
+function compareOptionalDates(left?: string, right?: string) {
+  if (left && right) return left.localeCompare(right)
+  if (left) return -1
+  if (right) return 1
+  return 0
+}
+
+export function sortTasks(tasks: Task[], sortBy: TaskSort) {
+  return [...tasks].sort((left, right) => {
+    let primaryComparison = 0
+
+    if (sortBy === 'priority') {
+      primaryComparison = priorityOrder[left.priority] - priorityOrder[right.priority]
+    } else if (sortBy === 'dueDate') {
+      primaryComparison = compareOptionalDates(left.dueDate, right.dueDate)
+    } else {
+      primaryComparison = right.createdAt.localeCompare(left.createdAt)
+    }
+
+    if (primaryComparison !== 0) return primaryComparison
+
+    const priorityComparison = priorityOrder[left.priority] - priorityOrder[right.priority]
+    if (priorityComparison !== 0) return priorityComparison
+
+    const dueDateComparison = compareOptionalDates(left.dueDate, right.dueDate)
+    if (dueDateComparison !== 0) return dueDateComparison
+
+    const createdAtComparison = right.createdAt.localeCompare(left.createdAt)
+    if (createdAtComparison !== 0) return createdAtComparison
+
+    const titleComparison = left.title.localeCompare(right.title)
+    return titleComparison || left.id.localeCompare(right.id)
+  })
+}
 
 export function localDateKey(date = new Date()) {
   const year = date.getFullYear()
