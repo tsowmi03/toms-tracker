@@ -108,6 +108,68 @@ describe('authenticated workspace', () => {
     expect(container.textContent).toContain('Drop a task here')
   })
 
+  it('sorts by priority by default and lets users persist another sort for the board', async () => {
+    trackerState.ready = true
+    trackerState.tasks = [
+      {
+        id: 'soon-low',
+        title: 'Soon low',
+        description: '',
+        status: 'todo',
+        priority: 'low',
+        areaId: 'personal',
+        dueDate: '2026-08-05',
+        tags: [],
+        isFocus: false,
+        createdAt: '2026-08-03T00:00:00.000Z',
+        updatedAt: '2026-08-03T00:00:00.000Z',
+      },
+      {
+        id: 'later-high',
+        title: 'Later high',
+        description: '',
+        status: 'todo',
+        priority: 'high',
+        areaId: 'personal',
+        dueDate: '2026-08-06',
+        tags: [],
+        isFocus: false,
+        createdAt: '2026-08-02T00:00:00.000Z',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      },
+      {
+        id: 'soon-urgent',
+        title: 'Soon urgent',
+        description: '',
+        status: 'todo',
+        priority: 'urgent',
+        areaId: 'personal',
+        dueDate: '2026-08-05',
+        tags: [],
+        isFocus: false,
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+      },
+    ]
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(<App />))
+    const taskTitles = () => Array.from(container.querySelectorAll('.board-column:first-child .task-card h3'))
+      .map((heading) => heading.textContent)
+    expect(taskTitles()).toEqual(['Soon urgent', 'Later high', 'Soon low'])
+
+    const sortSelect = container.querySelector<HTMLSelectElement>('[aria-label="Sort tasks by"]')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(sortSelect, 'dueDate')
+      sortSelect?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(taskTitles()).toEqual(['Soon urgent', 'Soon low', 'Later high'])
+    expect(localStorage.getItem('toms-tracker-sort-v1:user-uid:board:personal-user-uid')).toBe('dueDate')
+  })
+
   it('persists dark mode from the top-bar control', async () => {
     trackerState.ready = true
     const container = document.createElement('div')

@@ -1,6 +1,7 @@
 export type Status = 'inbox' | 'todo' | 'progress' | 'waiting' | 'done'
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent'
 export type View = 'today' | 'board' | 'inbox'
+export type TaskSort = 'priority' | 'dueDate' | 'createdAt'
 export type BoardType = 'personal' | 'shared'
 export type BoardRole = 'owner' | 'member'
 

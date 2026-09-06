@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { hasStoredData, loadData, saveData } from './storage'
+import { hasStoredData, loadData, loadSortPreference, saveData, saveSortPreference } from './storage'
 import type { TrackerData } from './types'
 
 function workspace(title: string): TrackerData {
@@ -62,5 +62,16 @@ describe('browser workspace isolation', () => {
     expect(loadData('alice-uid', 'shared-board')).toEqual(shared)
     expect(hasStoredData('alice-uid', 'personal-board')).toBe(true)
     expect(hasStoredData('alice-uid', 'missing-board')).toBe(false)
+  })
+
+  it('defaults to priority sorting and remembers a preference per user and board', () => {
+    expect(loadSortPreference('alice-uid', 'personal-board')).toBe('priority')
+
+    saveSortPreference('dueDate', 'alice-uid', 'personal-board')
+    saveSortPreference('createdAt', 'alice-uid', 'shared-board')
+
+    expect(loadSortPreference('alice-uid', 'personal-board')).toBe('dueDate')
+    expect(loadSortPreference('alice-uid', 'shared-board')).toBe('createdAt')
+    expect(loadSortPreference('bob-uid', 'personal-board')).toBe('priority')
   })
 })
