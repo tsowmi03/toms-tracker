@@ -7,6 +7,7 @@ import type { TrackerData } from './types'
 function workspace(title: string): TrackerData {
   return {
     version: 1,
+    meetings: [],
     areas: [{ id: 'personal', name: 'Personal', color: '#77776e' }],
     tasks: [{
       id: `${title}-task`,
@@ -73,5 +74,14 @@ describe('browser workspace isolation', () => {
     expect(loadSortPreference('alice-uid', 'personal-board')).toBe('dueDate')
     expect(loadSortPreference('alice-uid', 'shared-board')).toBe('createdAt')
     expect(loadSortPreference('bob-uid', 'personal-board')).toBe('priority')
+  })
+
+  it('loads an older board backup without meeting data', () => {
+    const oldBoard = workspace('Older board')
+    delete oldBoard.meetings
+    saveData(oldBoard, 'alice-uid', 'personal-board')
+
+    expect(loadData('alice-uid', 'personal-board').meetings).toEqual([])
+    expect(loadData('alice-uid', 'personal-board').tasks).toEqual(oldBoard.tasks)
   })
 })

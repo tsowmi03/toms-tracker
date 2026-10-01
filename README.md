@@ -20,6 +20,7 @@ The production Firebase configuration lives in ignored `.env.local` and `.env.pr
 4. Move blocked or delegated work into **Waiting**.
 5. Close finished work in **Done**.
 6. Pin a deliberately short list to **Today**.
+7. Record meetings on the relevant board, capture decisions and open questions, and create or link action tasks for follow-up.
 
 ## Run locally
 
@@ -41,7 +42,8 @@ users/{userId}
 boards/{boardId}
 ├── members/{userId}
 ├── areas/{areaId}
-└── tasks/{taskId}
+├── tasks/{taskId}
+└── meetings/{meetingId}
 
 boardInvites/{randomInviteToken}
 ```
@@ -60,6 +62,7 @@ Firestore rules still require the authenticated UID to match `{userId}` for prof
 
 - Personal boards have only their owner as a member and cannot create invites.
 - Shared boards allow every member to read and edit tasks and areas.
+- Meeting records use the same board membership boundary as tasks and areas.
 - Only the owner can create invite links or remove members.
 - Members can leave a shared board themselves.
 - Invite documents can be opened only by exact, cryptographically random token and cannot be listed.
@@ -119,6 +122,7 @@ Do not deploy Firestore rules until `npm run test:rules` passes. Do not use the 
 - Multi-tab persistent Firestore cache and per-board offline mirrors
 - Drag-and-drop Kanban board on desktop
 - Custom board areas and task editing with priorities, dates, notes, tags, and daily focus
+- Board-scoped meetings with agendas, notes, decisions, questions, next meeting links, and task-backed actions
 - Search, filtering, local mirroring, and JSON backup export
 - Keyboard shortcuts: `N` for a new task and `Command/Ctrl + K` for search
 

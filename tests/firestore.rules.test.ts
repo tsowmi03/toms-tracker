@@ -41,6 +41,21 @@ const validTask = {
   updatedAt: now,
 }
 
+const validMeeting = {
+  id: 'meeting-one',
+  title: 'Weekly operations',
+  date: '2026-10-01',
+  participants: 'Alice, Bob',
+  series: 'Weekly operations',
+  agenda: 'Review open work',
+  notes: 'Discussed priorities',
+  decisions: [{ id: 'decision-one', text: 'Focus on enrolments', reason: 'Term starts soon' }],
+  questions: [{ id: 'question-one', text: 'How many tutors?', owner: 'Bob', resolved: false }],
+  actionTaskIds: ['task-one'],
+  createdAt: now,
+  updatedAt: now,
+}
+
 function boardFields(id: string, ownerId: string, type: 'personal' | 'shared' = 'shared') {
   return { id, name: type === 'shared' ? 'Household' : 'My tasks', type, ownerId, createdAt: now, updatedAt: now }
 }
@@ -96,6 +111,25 @@ beforeEach(async () => environment.clearFirestore())
 afterAll(async () => environment.cleanup())
 
 describe('Firestore task-board membership rules', () => {
+  it('shares meeting records with board members and blocks outsiders', async () => {
+    const aliceDatabase = environment.authenticatedContext(aliceUid).firestore()
+    const bobDatabase = environment.authenticatedContext(bobUid).firestore()
+    const charlieDatabase = environment.authenticatedContext(charlieUid).firestore()
+    await createOwnedBoard(aliceDatabase, aliceUid)
+    await createInvite(aliceDatabase)
+    await acceptInvite(bobDatabase, bobUid)
+
+    const meetingPath = ['boards', boardId, 'meetings', validMeeting.id] as const
+    await assertSucceeds(setDoc(doc(aliceDatabase, ...meetingPath), validMeeting))
+    await assertSucceeds(getDoc(doc(bobDatabase, ...meetingPath)))
+    await assertSucceeds(getDocs(collection(bobDatabase, 'boards', boardId, 'meetings')))
+    await assertSucceeds(setDoc(doc(bobDatabase, ...meetingPath), { ...validMeeting, notes: 'Updated together' }))
+    await assertFails(getDoc(doc(charlieDatabase, ...meetingPath)))
+    await assertFails(getDocs(collection(charlieDatabase, 'boards', boardId, 'meetings')))
+    await assertFails(setDoc(doc(charlieDatabase, ...meetingPath), validMeeting))
+    await assertFails(setDoc(doc(aliceDatabase, ...meetingPath), { ...validMeeting, unexpected: true }))
+    await assertFails(setDoc(doc(aliceDatabase, ...meetingPath), { ...validMeeting, date: 'tomorrow' }))
+  })
   it('keeps legacy per-user data private during migration', async () => {
     const aliceDatabase = environment.authenticatedContext(aliceUid).firestore()
     const bobDatabase = environment.authenticatedContext(bobUid).firestore()

@@ -25,6 +25,7 @@ import type {
   BoardMember,
   BoardRole,
   BoardType,
+  Meeting,
   Task,
   TaskBoard,
   TrackerData,
@@ -74,6 +75,29 @@ function taskFromDocument(id: string, data: DocumentData): Task {
 
 function areaFromDocument(id: string, data: DocumentData): Area {
   return { id, name: String(data.name ?? 'Untitled'), color: String(data.color ?? '#77776e') }
+}
+
+function meetingFromDocument(id: string, data: DocumentData): Meeting {
+  return {
+    id,
+    title: String(data.title ?? ''),
+    date: String(data.date ?? ''),
+    participants: String(data.participants ?? ''),
+    series: String(data.series ?? ''),
+    agenda: String(data.agenda ?? ''),
+    notes: String(data.notes ?? ''),
+    decisions: Array.isArray(data.decisions) ? data.decisions.filter((item) => item && typeof item === 'object').map((item) => ({
+      id: String(item.id ?? ''), text: String(item.text ?? ''), reason: String(item.reason ?? ''),
+    })) : [],
+    questions: Array.isArray(data.questions) ? data.questions.filter((item) => item && typeof item === 'object').map((item) => ({
+      id: String(item.id ?? ''), text: String(item.text ?? ''), owner: String(item.owner ?? ''), resolved: Boolean(item.resolved),
+    })) : [],
+    actionTaskIds: Array.isArray(data.actionTaskIds) ? data.actionTaskIds.map(String) : [],
+    nextMeetingDate: data.nextMeetingDate ? String(data.nextMeetingDate) : undefined,
+    previousMeetingId: data.previousMeetingId ? String(data.previousMeetingId) : undefined,
+    createdAt: String(data.createdAt ?? ''),
+    updatedAt: String(data.updatedAt ?? ''),
+  }
 }
 
 function boardFromReference(id: string, data: DocumentData): TaskBoard {
@@ -218,12 +242,14 @@ export function subscribeToBoard(
   const { db } = servicesOrThrow()
   let tasks: Task[] | null = null
   let areas: Area[] | null = null
+  let meetings: Meeting[] | null = null
   let taskWritesPending = false
   let areaWritesPending = false
+  let meetingWritesPending = false
 
   const publish = () => {
-    if (!tasks || !areas) return
-    onData({ version: 1, tasks, areas }, taskWritesPending || areaWritesPending)
+    if (!tasks || !areas || !meetings) return
+    onData({ version: 1, tasks, areas, meetings }, taskWritesPending || areaWritesPending || meetingWritesPending)
   }
 
   const unsubscribeTasks = onSnapshot(
@@ -246,10 +272,21 @@ export function subscribeToBoard(
     },
     onError,
   )
+  const unsubscribeMeetings = onSnapshot(
+    collection(db, 'boards', boardId, 'meetings'),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      meetings = snapshot.docs.map((item) => meetingFromDocument(item.id, item.data()))
+      meetingWritesPending = snapshot.metadata.hasPendingWrites
+      publish()
+    },
+    onError,
+  )
 
   return () => {
     unsubscribeTasks()
     unsubscribeAreas()
+    unsubscribeMeetings()
   }
 }
 
@@ -265,6 +302,8 @@ export async function persistWorkspaceChanges(boardId: string, previous: Tracker
   const nextTasks = new Map(next.tasks.map((task) => [task.id, task]))
   const previousAreas = new Map(previous.areas.map((area) => [area.id, area]))
   const nextAreas = new Map(next.areas.map((area) => [area.id, area]))
+  const previousMeetings = new Map((previous.meetings ?? []).map((meeting) => [meeting.id, meeting]))
+  const nextMeetings = new Map((next.meetings ?? []).map((meeting) => [meeting.id, meeting]))
 
   nextTasks.forEach((task, id) => {
     if (valuesDiffer(previousTasks.get(id), task)) {
@@ -293,6 +332,15 @@ export async function persistWorkspaceChanges(boardId: string, previous: Tracker
       batch.delete(doc(db, 'boards', boardId, 'areas', id))
       if (mirrorLegacyWorkspace && legacyUid) batch.delete(doc(db, 'users', legacyUid, 'areas', id))
     })
+  })
+
+  nextMeetings.forEach((meeting, id) => {
+    if (valuesDiffer(previousMeetings.get(id), meeting)) {
+      operations.push((batch) => batch.set(doc(db, 'boards', boardId, 'meetings', id), stripUndefined(meeting)))
+    }
+  })
+  previousMeetings.forEach((_, id) => {
+    if (!nextMeetings.has(id)) operations.push((batch) => batch.delete(doc(db, 'boards', boardId, 'meetings', id)))
   })
 
   await commitOperations(db, operations)
