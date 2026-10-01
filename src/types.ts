@@ -1,6 +1,6 @@
 export type Status = 'inbox' | 'todo' | 'progress' | 'waiting' | 'done'
 export type Priority = 'none' | 'low' | 'medium' | 'high' | 'urgent'
-export type View = 'today' | 'board' | 'inbox'
+export type View = 'today' | 'board' | 'inbox' | 'meetings'
 export type TaskSort = 'priority' | 'dueDate' | 'createdAt'
 export type BoardType = 'personal' | 'shared'
 export type BoardRole = 'owner' | 'member'
@@ -28,9 +28,40 @@ export interface Task {
   completedAt?: string
 }
 
+export interface MeetingDecision {
+  id: string
+  text: string
+  reason: string
+}
+
+export interface MeetingQuestion {
+  id: string
+  text: string
+  owner: string
+  resolved: boolean
+}
+
+export interface Meeting {
+  id: string
+  title: string
+  date: string
+  participants: string
+  series: string
+  agenda: string
+  notes: string
+  decisions: MeetingDecision[]
+  questions: MeetingQuestion[]
+  actionTaskIds: string[]
+  nextMeetingDate?: string
+  previousMeetingId?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface TrackerData {
   tasks: Task[]
   areas: Area[]
+  meetings?: Meeting[]
   version: 1
 }
 

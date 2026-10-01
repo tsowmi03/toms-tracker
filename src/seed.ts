@@ -11,6 +11,7 @@ const now = new Date().toISOString()
 
 export const seedData: TrackerData = {
   version: 1,
+  meetings: [],
   areas: [
     { id: 'personal', name: 'Personal', color: '#7357d6' },
     { id: 'work', name: 'Work', color: '#e65f31' },

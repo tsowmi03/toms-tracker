@@ -22,7 +22,7 @@ export function loadData(uid?: string, boardId?: string): TrackerData {
     if (parsed.version !== 1 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.areas)) {
       return seedData
     }
-    return parsed
+    return { ...parsed, meetings: Array.isArray(parsed.meetings) ? parsed.meetings : [] }
   } catch {
     return seedData
   }

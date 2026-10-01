@@ -34,6 +34,7 @@ import {
   UsersIcon,
 } from './icons'
 import { AuthScreen } from './auth/AuthScreen'
+import { MeetingsView } from './MeetingsView'
 import { useAuth } from './auth/AuthContext'
 import { useTrackerData, type SyncState } from './data/useTrackerData'
 import {
@@ -353,7 +354,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
               <option value="__new__">New task board…</option>
             </select>
           </label>
-          <label className="search-box">
+          {view !== 'meetings' && <label className="search-box">
             <SearchIcon />
             <input
               ref={searchRef}
@@ -363,16 +364,13 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
               aria-label="Search tasks"
             />
             <kbd>⌘K</kbd>
-          </label>
+          </label>}
           <div className="topbar-actions">
             <SyncIndicator state={syncState} />
             <button className="icon-button theme-button" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
               {theme === 'light' ? <MoonIcon /> : <SunIcon />}
             </button>
-            <button className="primary-button" onClick={() => openNewTask()} aria-label="Add task">
-              <PlusIcon />
-              <span>Add task</span>
-            </button>
+            <button className="primary-button" onClick={() => openNewTask()} aria-label="Add task"><PlusIcon /><span>Add task</span></button>
           </div>
         </header>
 
@@ -387,7 +385,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
               {activeBoard.type === 'shared' && (
                 <button className="board-members-button" onClick={() => setShareBoardOpen(true)}><UsersIcon />Members</button>
               )}
-              <label className="filter-select" title="Sort tasks">
+              {view !== 'meetings' && <><label className="filter-select" title="Sort tasks">
                 <SortIcon />
                 <select value={sortBy} onChange={(event) => {
                   const nextSort = event.target.value as TaskSort
@@ -410,7 +408,7 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
                 <button className="text-button" onClick={() => { setAreaFilter(undefined); setPriorityFilter('all'); setQuery('') }}>
                   Clear filters
                 </button>
-              )}
+              )}</>}
             </div>
           </div>
 
@@ -442,6 +440,16 @@ function WorkspaceApp({ uid, accountLabel, displayName, email, onSignOut, theme,
               onNew={() => openNewTask('inbox')}
               onMove={updateStatus}
               onToggleFocus={toggleFocus}
+            />
+          )}
+          {view === 'meetings' && (
+            <MeetingsView
+              key={activeBoard.id}
+              data={data}
+              members={boardMembers}
+              isSharedBoard={activeBoard.type === 'shared'}
+              onChange={setData}
+              onOpenTask={setEditorTask}
             />
           )}
         </main>
@@ -558,12 +566,14 @@ const viewTitles: Record<View, string> = {
   today: 'Today',
   board: 'Life board',
   inbox: 'Inbox',
+  meetings: 'Meetings',
 }
 
 const viewDescriptions: Record<View, string> = {
   today: 'A short list for what deserves your attention now.',
   board: 'See what is planned, active, waiting, and finished.',
   inbox: 'Loose thoughts land here until you decide what they mean.',
+  meetings: 'Decisions, open questions, and the work that follows.',
 }
 
 function getDayLabel() {
@@ -613,6 +623,7 @@ function Sidebar({ view, onView, areas, areaFilter, onArea, tasks, boards, activ
         <NavButton active={view === 'today' && !areaFilter} icon={<TodayIcon />} label="Today" count={todayCount} onClick={() => onView('today')} />
         <NavButton active={view === 'board' && !areaFilter} icon={<BoardIcon />} label="Life board" onClick={() => onView('board')} />
         <NavButton active={view === 'inbox' && !areaFilter} icon={<InboxIcon />} label="Inbox" count={inboxCount} onClick={() => onView('inbox')} />
+        <NavButton active={view === 'meetings'} icon={<CalendarIcon />} label="Meetings" onClick={() => onView('meetings')} />
       </nav>
 
       <div className="sidebar-section">
@@ -1135,7 +1146,7 @@ function SettingsPanel({ data, accountLabel, syncState, onSignOut, onClose, onRe
           </div>
           <span className={`settings-sync-dot sync-${syncState}`} />
         </div>
-        <button className="settings-action" onClick={() => exportData(data)}><span><DownloadIcon /></span><div><strong>Export current board</strong><small>Download this board’s tasks and areas as JSON</small></div><b>→</b></button>
+        <button className="settings-action" onClick={() => exportData(data)}><span><DownloadIcon /></span><div><strong>Export current board</strong><small>Download this board’s tasks, areas, and meetings as JSON</small></div><b>→</b></button>
         <div className="settings-stats">
           <div><strong>{data.tasks.length}</strong><span>Total tasks</span></div>
           <div><strong>{data.tasks.filter((task) => task.status === 'done').length}</strong><span>Completed</span></div>
@@ -1185,6 +1196,7 @@ function MobileNav({ view, onView, inboxCount, onAdd, onBoards, onSettings }: { 
       <button className={view === 'today' ? 'active' : ''} onClick={() => onView('today')}><TodayIcon /><span>Today</span></button>
       <button className={view === 'board' ? 'active' : ''} onClick={onBoards}><BoardIcon /><span>Boards</span></button>
       <button className="mobile-add" onClick={onAdd} aria-label="Add task"><PlusIcon /></button>
+      <button className={view === 'meetings' ? 'active' : ''} onClick={() => onView('meetings')}><CalendarIcon /><span>Meetings</span></button>
       <button className={view === 'inbox' ? 'active' : ''} onClick={() => onView('inbox')}><span className="mobile-icon-wrap"><InboxIcon />{inboxCount > 0 && <i>{inboxCount}</i>}</span><span>Inbox</span></button>
       <button onClick={onSettings}><SettingsIcon /><span>Settings</span></button>
     </nav>
